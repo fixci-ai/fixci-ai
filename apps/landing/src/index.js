@@ -1,6 +1,52 @@
 export default {
   async fetch(request, env) {
-    const html = `<!DOCTYPE html>
+    const url = new URL(request.url);
+
+    // Handle API requests
+    if (url.pathname === '/api/waitlist' && request.method === 'POST') {
+      return handleWaitlistSignup(request, env);
+    }
+
+    // Serve landing page
+    return serveLandingPage();
+  },
+};
+
+async function handleWaitlistSignup(request, env) {
+  try {
+    const { email } = await request.json();
+
+    if (!email || !isValidEmail(email)) {
+      return jsonResponse({ error: 'Invalid email address' }, 400);
+    }
+
+    await env.DB.prepare(
+      'INSERT INTO waitlist (email) VALUES (?) ON CONFLICT(email) DO NOTHING'
+    ).bind(email).run();
+
+    return jsonResponse({ success: true });
+  } catch (error) {
+    console.error('Waitlist signup error:', error);
+    return jsonResponse({ error: 'Failed to save email' }, 500);
+  }
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'content-type': 'application/json',
+      'access-control-allow-origin': '*',
+    },
+  });
+}
+
+function serveLandingPage() {
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -146,6 +192,11 @@ export default {
 
     .submit-btn:hover {
       background: var(--primary-dark);
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
 
     .form-note {
@@ -351,6 +402,21 @@ export default {
       display: block;
     }
 
+    .error-message {
+      display: none;
+      background: rgba(248, 81, 73, 0.1);
+      border: 1px solid #f85149;
+      padding: 16px 24px;
+      border-radius: 8px;
+      color: #f85149;
+      font-weight: 500;
+      margin-top: 12px;
+    }
+
+    .error-message.show {
+      display: block;
+    }
+
     .email-form.hidden {
       display: none;
     }
@@ -387,6 +453,7 @@ export default {
       <div class="success-message" id="success-message">
         You're on the list! We'll notify you when FixCI launches.
       </div>
+      <div class="error-message" id="error-message"></div>
     </div>
   </section>
 
@@ -475,6 +542,7 @@ export default {
       <div class="success-message" id="success-message-2">
         You're on the list! We'll notify you when FixCI launches.
       </div>
+      <div class="error-message" id="error-message-2"></div>
     </div>
   </section>
 
@@ -489,23 +557,45 @@ export default {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = form.querySelector('input[type="email"]').value;
-        const successId = form.id === 'waitlist-form' ? 'success-message' : 'success-message-2';
+        const button = form.querySelector('button');
+        const isFirst = form.id === 'waitlist-form';
+        const successEl = document.getElementById(isFirst ? 'success-message' : 'success-message-2');
+        const errorEl = document.getElementById(isFirst ? 'error-message' : 'error-message-2');
 
-        // TODO: Send email to backend API
-        console.log('Waitlist signup:', email);
+        button.disabled = true;
+        button.textContent = 'Joining...';
+        errorEl.classList.remove('show');
 
-        form.classList.add('hidden');
-        document.getElementById(successId).classList.add('show');
+        try {
+          const res = await fetch('/api/waitlist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+          });
+
+          const data = await res.json();
+
+          if (res.ok) {
+            form.classList.add('hidden');
+            successEl.classList.add('show');
+          } else {
+            throw new Error(data.error || 'Something went wrong');
+          }
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.classList.add('show');
+          button.disabled = false;
+          button.textContent = 'Join Waitlist';
+        }
       });
     });
   </script>
 </body>
 </html>`;
 
-    return new Response(html, {
-      headers: {
-        'content-type': 'text/html;charset=UTF-8',
-      },
-    });
-  },
-};
+  return new Response(html, {
+    headers: {
+      'content-type': 'text/html;charset=UTF-8',
+    },
+  });
+}

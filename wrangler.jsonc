@@ -1,5 +1,12 @@
 {
   "name": "fixci-landing",
   "main": "apps/landing/src/index.js",
-  "compatibility_date": "2024-01-01"
+  "compatibility_date": "2024-01-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fixci-db",
+      "database_id": "YOUR_DATABASE_ID"
+    }
+  ]
 }
