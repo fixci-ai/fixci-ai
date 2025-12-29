@@ -122,6 +122,7 @@ export async function getWorkflowJobs(owner, repo, runId, token) {
  * Note: GitHub redirects to the actual log file, so we need to follow redirects
  */
 export async function getJobLogs(owner, repo, jobId, token) {
+  // First request to GitHub API - don't follow redirects
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/actions/jobs/${jobId}/logs`,
     {
@@ -130,15 +131,29 @@ export async function getJobLogs(owner, repo, jobId, token) {
         'Accept': 'application/vnd.github+json',
         'User-Agent': 'FixCI-GitHub-App',
       },
-      redirect: 'follow', // Follow redirects to get actual log content
+      redirect: 'manual', // Don't auto-follow to avoid sending GitHub token to Azure
     }
   );
+
+  // GitHub returns a 302 redirect to Azure Blob Storage
+  if (response.status === 302) {
+    const logUrl = response.headers.get('Location');
+    if (!logUrl) {
+      throw new Error('No redirect location found for job logs');
+    }
+
+    // Fetch from Azure Blob Storage without Authorization header
+    const logsResponse = await fetch(logUrl);
+    if (!logsResponse.ok) {
+      throw new Error(`Failed to fetch job logs from storage: ${logsResponse.status}`);
+    }
+    return await logsResponse.text();
+  }
 
   if (!response.ok) {
     throw new Error(`Failed to fetch job logs: ${response.status} - ${response.statusText}`);
   }
 
-  // GitHub returns plain text logs after redirect
   return await response.text();
 }
 
@@ -184,7 +199,7 @@ ${analysis.code_example}
 ` : ''}${usageBadge}
 
 ---
-*Analysis confidence: ${Math.round(analysis.confidence_score * 100)}% | Model: ${analysis.model_used} | Processed in ${analysis.processing_time_ms}ms*
+*Analysis confidence: ${Math.round(analysis.confidence_score * 100)}% | Processed in ${analysis.processing_time_ms}ms*
 
 <sub>Powered by [FixCI](https://fixci.dev) - AI that explains why your pipeline broke</sub>`;
 }

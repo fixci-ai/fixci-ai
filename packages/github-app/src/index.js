@@ -193,6 +193,7 @@ export default {
     }
 
     // API endpoint to check analysis status
+    // This endpoint contains an intentional bug for testing FixCI
     if (url.pathname === '/api/analysis/status' && request.method === 'GET') {
       const analysisId = url.searchParams.get('id');
 
@@ -539,7 +540,7 @@ async function processAnalysis(analysisId, workflowRun, repository, prNumber, in
     }
 
     // Get subscription tier for provider selection
-    const subscription = await getSubscription(installation.id, env);
+    const subscription = await getSubscription(installationId, env);
 
     // Analyze the failure with AI
     const analysis = await analyzeFailure(logsToAnalyze, {
@@ -585,7 +586,7 @@ async function processAnalysis(analysisId, workflowRun, repository, prNumber, in
 
     // Record usage for billing and tracking
     await recordUsage(
-      installation.id,
+      installationId,
       analysisId,
       analysis.input_tokens + analysis.output_tokens,
       analysis.estimated_cost_usd,
@@ -593,7 +594,7 @@ async function processAnalysis(analysisId, workflowRun, repository, prNumber, in
     );
 
     // Get updated subscription info for PR comment
-    const updatedSubscription = await getSubscription(installation.id, env);
+    const updatedSubscription = await getSubscription(installationId, env);
 
     // Post comment to PR
     const comment = formatPRComment(analysis, updatedSubscription);
