@@ -61,37 +61,52 @@ export async function analyzeWithCloudflare(logs, context, env) {
 }
 
 function buildPrompt(logs, workflowName, jobName, errorMessage) {
-  return `Analyze this CI/CD build failure and provide actionable guidance.
+  return `You are analyzing a CI/CD build failure. Your goal is to identify the SPECIFIC error and provide an ACTIONABLE fix.
 
 **Workflow**: ${workflowName || 'Unknown'}
 **Job**: ${jobName || 'Unknown'}
 ${errorMessage ? `**Error Message**: ${errorMessage}` : ''}
 
-**Build Logs**:
+**Build Logs** (already filtered to show only the failed step):
 \`\`\`
-${logs.slice(-8000)}
+${logs}
 \`\`\`
 
-Provide your analysis in the following format:
+**Common CI/CD issues to look for**:
+- Missing dependencies or lock files (npm ci requires package-lock.json/yarn.lock)
+- Environment variables not set
+- Permission denied errors
+- Version conflicts or incompatible versions
+- Network/timeout issues
+- Missing files or directories
+- Syntax errors in config files
+- Docker/container issues
+
+**Analysis Guidelines**:
+1. Identify the EXACT error message (look for "error:", "Error:", "ERROR", "failed", "##[error]")
+2. Don't speculate - base your analysis on actual log content
+3. If the error is clear (e.g., "package-lock.json not found"), state it directly
+4. Provide specific, tested solutions (not generic advice like "check the logs")
+5. If you genuinely can't determine the cause, say so
+
+Provide your analysis in this format:
 
 ## Summary
-[One-sentence description of what went wrong]
+[One specific sentence describing the actual error]
 
 ## Root Cause
-[Detailed explanation of why the failure occurred]
+[What specifically went wrong based on the logs]
 
 ## Suggested Fix
-[Step-by-step instructions to fix the issue]
+[Concrete steps to fix, with commands/code if applicable]
 
 ## Code Example
 \`\`\`
-[If applicable, show code changes needed]
+[Only if code changes are needed - otherwise omit this section]
 \`\`\`
 
 ## Confidence
-[Rate your confidence: high/medium/low]
-
-Be concise, practical, and developer-friendly. Focus on actionable fixes.`;
+[Rate: high/medium/low]`;
 }
 
 function parseAnalysisResponse(text) {
