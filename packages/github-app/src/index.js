@@ -192,6 +192,32 @@ export default {
       return listWaitlist(request, env);
     }
 
+    // API endpoint to check analysis status
+    if (url.pathname === '/api/analysis/status' && request.method === 'GET') {
+      const analysisId = url.searchParams.get('id');
+
+      if (!analysisId) {
+        return jsonResponse({ error: 'Missing analysis ID' }, 400);
+      }
+
+      // Fetch analysis from database
+      const analysis = await env.DB.prepare(
+        'SELECT * FROM analyses WHERE id = ?'
+      ).bind(analysisId).first();
+
+      if (!analysis) {
+        return jsonResponse({ error: 'Analysis not found' }, 404);
+      }
+
+      // Common bug: typo in variable name (analyis instead of analysis)
+      return jsonResponse({
+        id: analyis.id,
+        status: analysis.analysis_status,
+        workflow: analysis.workflow_name,
+        createdAt: analysis.created_at
+      });
+    }
+
     // GitHub webhook endpoint
     if (url.pathname === '/webhook' && request.method === 'POST') {
       return handleWebhook(request, env, ctx);
