@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FixCI Admin Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 3rem;
+      border-bottom: 2px solid #10b981;
+      padding-bottom: 1rem;
+    }
+
+    h1 {
+      color: #10b981;
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .auth-section {
+      background: #1e293b;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+      border: 1px solid #334155;
+    }
+
+    .auth-section input {
+      width: 100%;
+      padding: 0.75rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: #1e293b;
+      padding: 1.5rem;
+      border-radius: 8px;
+      border: 1px solid #334155;
+    }
+
+    .card h2 {
+      color: #10b981;
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 0.75rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #10b981;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.75rem;
+      background: #10b981;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #059669;
+    }
+
+    button:disabled {
+      background: #334155;
+      cursor: not-allowed;
+    }
+
+    button.danger {
+      background: #ef4444;
+    }
+
+    button.danger:hover {
+      background: #dc2626;
+    }
+
+    .results {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #0f172a;
+      border-radius: 4px;
+      border: 1px solid #334155;
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+
+    .result-item {
+      padding: 0.75rem;
+      background: #1e293b;
+      margin-bottom: 0.5rem;
+      border-radius: 4px;
+      border-left: 3px solid #10b981;
+    }
+
+    .result-item h3 {
+      color: #10b981;
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .result-item p {
+      color: #94a3b8;
+      font-size: 0.85rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+
+    .badge.free { background: #334155; }
+    .badge.pro { background: #10b981; }
+    .badge.enterprise { background: #8b5cf6; }
+    .badge.active { background: #10b981; }
+    .badge.suspended { background: #ef4444; }
+
+    .success {
+      background: #10b98120;
+      border: 1px solid #10b981;
+      color: #10b981;
+      padding: 1rem;
+      border-radius: 4px;
+      margin-top: 1rem;
+    }
+
+    .error {
+      background: #ef444420;
+      border: 1px solid #ef4444;
+      color: #ef4444;
+      padding: 1rem;
+      border-radius: 4px;
+      margin-top: 1rem;
+    }
+
+    .loading {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    pre {
+      background: #0f172a;
+      padding: 1rem;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 0.8rem;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🔧 FixCI Admin Dashboard</h1>
+      <p class="subtitle">Manage subscriptions, reset limits, and search installations</p>
+    </header>
+
+    <div class="auth-section">
+      <label for="apiKey">Admin API Key</label>
+      <input
+        type="password"
+        id="apiKey"
+        placeholder="Enter your admin API key"
+        value=""
+      >
+    </div>
+
+    <div class="grid">
+      <!-- Search Installations -->
+      <div class="card">
+        <h2>🔍 Search Installations</h2>
+        <div class="form-group">
+          <label for="searchQuery">Search by account name</label>
+          <input
+            type="text"
+            id="searchQuery"
+            placeholder="e.g., fixci-ai, acme-corp"
+          >
+        </div>
+        <button onclick="searchInstallations()">Search</button>
+        <div id="searchResults"></div>
+      </div>
+
+      <!-- Grant Subscription -->
+      <div class="card">
+        <h2>✨ Grant Subscription</h2>
+        <div class="form-group">
+          <label for="grantInstallationId">Installation ID</label>
+          <input
+            type="number"
+            id="grantInstallationId"
+            placeholder="e.g., 101750548"
+          >
+        </div>
+        <div class="form-group">
+          <label for="grantTier">Tier</label>
+          <select id="grantTier">
+            <option value="free">Free (10/month)</option>
+            <option value="pro">Pro (100/month + overage)</option>
+            <option value="enterprise">Enterprise (Unlimited)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="grantReason">Reason (optional)</label>
+          <input
+            type="text"
+            id="grantReason"
+            placeholder="e.g., Beta tester reward"
+          >
+        </div>
+        <button onclick="grantSubscription()">Grant Access</button>
+        <div id="grantResult"></div>
+      </div>
+
+      <!-- Reset Usage -->
+      <div class="card">
+        <h2>🔄 Reset Usage</h2>
+        <div class="form-group">
+          <label for="resetInstallationId">Installation ID</label>
+          <input
+            type="number"
+            id="resetInstallationId"
+            placeholder="e.g., 101750548"
+          >
+        </div>
+        <div class="form-group">
+          <label for="resetReason">Reason (optional)</label>
+          <input
+            type="text"
+            id="resetReason"
+            placeholder="e.g., Support ticket #123"
+          >
+        </div>
+        <button onclick="resetUsage()">Reset Usage to 0</button>
+        <div id="resetResult"></div>
+      </div>
+
+      <!-- Revoke/Deny Access -->
+      <div class="card">
+        <h2>🚫 Revoke Access</h2>
+        <div class="form-group">
+          <label for="revokeInstallationId">Installation ID</label>
+          <input
+            type="number"
+            id="revokeInstallationId"
+            placeholder="e.g., 101750548"
+          >
+        </div>
+        <div class="form-group">
+          <label for="revokeAction">Action</label>
+          <select id="revokeAction">
+            <option value="downgrade">Downgrade to Free</option>
+            <option value="suspend">Suspend Account</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="revokeReason">Reason (optional)</label>
+          <input
+            type="text"
+            id="revokeReason"
+            placeholder="e.g., Terms of service violation"
+          >
+        </div>
+        <button class="danger" onclick="revokeAccess()">Revoke Access</button>
+        <div id="revokeResult"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'https://fixci-github-app.adam-vegh.workers.dev';
+
+    function getApiKey() {
+      const key = document.getElementById('apiKey').value;
+      if (!key) {
+        alert('Please enter your Admin API Key');
+        return null;
+      }
+      return key;
+    }
+
+    async function searchInstallations() {
+      const apiKey = getApiKey();
+      if (!apiKey) return;
+
+      const query = document.getElementById('searchQuery').value;
+      if (!query || query.length < 2) {
+        alert('Search query must be at least 2 characters');
+        return;
+      }
+
+      const resultsDiv = document.getElementById('searchResults');
+      resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/admin/installations/search?q=${encodeURIComponent(query)}`, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          resultsDiv.innerHTML = `<div class="error">${data.error || 'Search failed'}</div>`;
+          return;
+        }
+
+        if (data.results.length === 0) {
+          resultsDiv.innerHTML = '<div class="results">No installations found</div>';
+          return;
+        }
+
+        const html = `
+          <div class="results">
+            ${data.results.map(inst => `
+              <div class="result-item">
+                <h3>${inst.account_login}</h3>
+                <p><strong>ID:</strong> ${inst.installation_id}</p>
+                <p>
+                  <span class="badge ${inst.tier || 'free'}">${inst.tier || 'free'}</span>
+                  <span class="badge ${inst.subscription_status || 'active'}">${inst.subscription_status || 'active'}</span>
+                </p>
+                <p><strong>Usage:</strong> ${inst.analyses_used_current_period || 0}/${inst.analyses_limit_monthly || 0} analyses</p>
+                <p><strong>Repos:</strong> ${inst.repository_count || 0}</p>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        resultsDiv.innerHTML = html;
+      } catch (error) {
+        resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+      }
+    }
+
+    async function grantSubscription() {
+      const apiKey = getApiKey();
+      if (!apiKey) return;
+
+      const installationId = parseInt(document.getElementById('grantInstallationId').value);
+      const tier = document.getElementById('grantTier').value;
+      const reason = document.getElementById('grantReason').value;
+
+      if (!installationId) {
+        alert('Please enter Installation ID');
+        return;
+      }
+
+      const resultsDiv = document.getElementById('grantResult');
+      resultsDiv.innerHTML = '<div class="loading">Granting...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/admin/subscriptions/grant`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ installationId, tier, reason })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          resultsDiv.innerHTML = `<div class="error">${data.error || 'Grant failed'}</div>`;
+          return;
+        }
+
+        resultsDiv.innerHTML = `
+          <div class="success">
+            <strong>✓ Success!</strong><br>
+            ${data.message || 'Subscription granted'}
+          </div>
+        `;
+      } catch (error) {
+        resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+      }
+    }
+
+    async function resetUsage() {
+      const apiKey = getApiKey();
+      if (!apiKey) return;
+
+      const installationId = parseInt(document.getElementById('resetInstallationId').value);
+      const reason = document.getElementById('resetReason').value;
+
+      if (!installationId) {
+        alert('Please enter Installation ID');
+        return;
+      }
+
+      const resultsDiv = document.getElementById('resetResult');
+      resultsDiv.innerHTML = '<div class="loading">Resetting...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/admin/subscriptions/reset-usage`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ installationId, reason })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          resultsDiv.innerHTML = `<div class="error">${data.error || 'Reset failed'}</div>`;
+          return;
+        }
+
+        resultsDiv.innerHTML = `
+          <div class="success">
+            <strong>✓ Success!</strong><br>
+            ${data.message || 'Usage reset'}<br>
+            <small>Previous usage: ${data.previousUsage || 0} analyses</small>
+          </div>
+        `;
+      } catch (error) {
+        resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+      }
+    }
+
+    async function revokeAccess() {
+      const apiKey = getApiKey();
+      if (!apiKey) return;
+
+      const installationId = parseInt(document.getElementById('revokeInstallationId').value);
+      const action = document.getElementById('revokeAction').value;
+      const reason = document.getElementById('revokeReason').value;
+
+      if (!installationId) {
+        alert('Please enter Installation ID');
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to ${action} access for installation ${installationId}?`)) {
+        return;
+      }
+
+      const resultsDiv = document.getElementById('revokeResult');
+      resultsDiv.innerHTML = '<div class="loading">Processing...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/admin/subscriptions/revoke`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ installationId, action, reason })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          resultsDiv.innerHTML = `<div class="error">${data.error || 'Revoke failed'}</div>`;
+          return;
+        }
+
+        resultsDiv.innerHTML = `
+          <div class="success">
+            <strong>✓ Success!</strong><br>
+            ${data.message || 'Access revoked'}
+          </div>
+        `;
+      } catch (error) {
+        resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+      }
+    }
+
+    // Auto-fill installation ID from search results
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.result-item')) {
+        const item = e.target.closest('.result-item');
+        const id = item.querySelector('p').textContent.match(/\d+/)[0];
+
+        // Fill all installation ID fields
+        document.getElementById('grantInstallationId').value = id;
+        document.getElementById('resetInstallationId').value = id;
+        document.getElementById('revokeInstallationId').value = id;
+
+        // Scroll to grant section
+        document.querySelector('.card:nth-child(2)').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  </script>
+</body>
+</html>
