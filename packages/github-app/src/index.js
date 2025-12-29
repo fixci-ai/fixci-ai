@@ -2,7 +2,7 @@ import { analyzeFailure } from './analyzer.js';
 import { getInstallationToken, getWorkflowJobs, getJobLogs, postPRComment, formatPRComment } from './github.js';
 import { canAnalyze, recordUsage, getSubscription, getTierConfig } from './subscription.js';
 import { handleStripeWebhook, createCheckoutSession, createPortalSession } from './stripe.js';
-import { listSubscriptions, grantSubscription, updateSubscriptionStatus, getSubscriptionDetails, resetUsage, getStats, listWaitlist, searchInstallations } from './admin.js';
+import { listSubscriptions, grantSubscription, updateSubscriptionStatus, getSubscriptionDetails, resetUsage, getStats, listWaitlist, searchInstallations, revokeSubscription } from './admin.js';
 
 /**
  * FixCI GitHub App - Webhook Handler
@@ -180,6 +180,11 @@ export default {
     // Admin API: Reset usage for an installation
     if (url.pathname === '/admin/subscriptions/reset-usage' && request.method === 'POST') {
       return resetUsage(request, env);
+    }
+
+    // Admin API: Revoke/deny subscription access
+    if (url.pathname === '/admin/subscriptions/revoke' && request.method === 'POST') {
+      return revokeSubscription(request, env);
     }
 
     // Admin API: Get overall statistics

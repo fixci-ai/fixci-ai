@@ -327,6 +327,100 @@ export async function resetUsage(request, env) {
 }
 
 /**
+ * Revoke/deny subscription access (downgrade to free or suspend)
+ */
+export async function revokeSubscription(request, env) {
+  const auth = verifyAdminAuth(request, env);
+  if (!auth.authorized) {
+    return jsonResponse({ error: auth.error }, 401);
+  }
+
+  const { installationId, action, reason } = await request.json();
+
+  if (!installationId) {
+    return jsonResponse({ error: 'Missing installationId' }, 400);
+  }
+
+  if (!action || !['downgrade', 'suspend'].includes(action)) {
+    return jsonResponse({
+      error: 'Missing or invalid action. Use: "downgrade" (to free) or "suspend"'
+    }, 400);
+  }
+
+  const subscription = await getSubscription(installationId, env);
+  const oldTier = subscription.tier;
+  const oldStatus = subscription.status;
+
+  if (action === 'downgrade') {
+    // Downgrade to free tier
+    await env.DB.prepare(`
+      UPDATE subscriptions
+      SET
+        tier = 'free',
+        analyses_limit_monthly = 10,
+        stripe_customer_id = NULL,
+        stripe_subscription_id = NULL,
+        updated_at = datetime('now')
+      WHERE installation_id = ?
+    `).bind(installationId).run();
+
+    await logBillingEvent(
+      installationId,
+      'subscription_revoked',
+      0,
+      {
+        action: 'downgrade',
+        oldTier,
+        newTier: 'free',
+        reason: reason || 'Manual revocation by admin'
+      },
+      env
+    );
+
+    return jsonResponse({
+      success: true,
+      message: `Subscription downgraded from ${oldTier} to free`,
+      installationId,
+      oldTier,
+      newTier: 'free'
+    });
+  }
+
+  if (action === 'suspend') {
+    // Suspend the subscription
+    await env.DB.prepare(`
+      UPDATE subscriptions
+      SET
+        status = 'suspended',
+        updated_at = datetime('now')
+      WHERE installation_id = ?
+    `).bind(installationId).run();
+
+    await logBillingEvent(
+      installationId,
+      'subscription_suspended',
+      0,
+      {
+        action: 'suspend',
+        tier: subscription.tier,
+        oldStatus,
+        reason: reason || 'Manual suspension by admin'
+      },
+      env
+    );
+
+    return jsonResponse({
+      success: true,
+      message: `Subscription suspended (tier: ${subscription.tier})`,
+      installationId,
+      tier: subscription.tier,
+      oldStatus,
+      newStatus: 'suspended'
+    });
+  }
+}
+
+/**
  * Get overall statistics
  */
 export async function getStats(request, env) {
