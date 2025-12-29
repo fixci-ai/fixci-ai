@@ -1,9 +1,7 @@
 name = "fixci-github-app"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
-# Real-world bug: referencing non-existent environment
-workers_dev = false
-route = "fixci-app.nonexistent-domain.com/*"
+workers_dev = true
 
 # D1 Database binding
 [[d1_databases]]
