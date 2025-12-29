@@ -1,397 +1,4 @@
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-
-    // Serve logo
-    if (url.pathname === '/logo.svg' || url.pathname === '/logo.png') {
-      return serveLogo();
-    }
-
-    // Serve favicon
-    if (url.pathname === '/favicon.svg') {
-      return serveLogo();
-    }
-
-    // Handle API requests
-    if (url.pathname === '/api/waitlist' && request.method === 'POST') {
-      return handleWaitlistSignup(request, env);
-    }
-
-    // Redirect to GitHub App installation
-    if (url.pathname === '/install') {
-      return Response.redirect(
-        'https://github.com/apps/fixci-ai/installations/new',
-        302
-      );
-    }
-
-    // Post-installation success page
-    if (url.pathname === '/installed') {
-      return serveInstalledPage(url);
-    }
-
-    // Serve landing page
-    return serveLandingPage();
-  },
-};
-
-async function handleWaitlistSignup(request, env) {
-  try {
-    const { email, repository } = await request.json();
-
-    if (!email || !isValidEmail(email)) {
-      return jsonResponse({ error: 'Invalid email address' }, 400);
-    }
-
-    if (!repository || !repository.includes('github.com')) {
-      return jsonResponse({ error: 'Invalid GitHub repository URL' }, 400);
-    }
-
-    await env.DB.prepare(
-      'INSERT INTO waitlist (email, repository) VALUES (?, ?) ON CONFLICT(email) DO UPDATE SET repository = excluded.repository'
-    ).bind(email, repository).run();
-
-    return jsonResponse({ success: true });
-  } catch (error) {
-    console.error('Waitlist signup error:', error);
-    return jsonResponse({ error: 'Failed to save email' }, 500);
-  }
-}
-
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-
-function serveFavicon() {
-  const svg = `<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background circle -->
-  <circle cx="60" cy="60" r="55" fill="#1a1d2e"/>
-  
-  <!-- Checkmark Icon -->
-  <defs>
-    <linearGradient id="checkGradientIcon" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#5FFFB0;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#00D68F;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  
-  <!-- Checkmark shape centered -->
-  <path d="M 35 60 L 52 77 L 85 40" 
-        stroke="url(#checkGradientIcon)" 
-        stroke-width="12" 
-        stroke-linecap="round" 
-        stroke-linejoin="round" 
-        fill="none"/>
-</svg>
-`;
-
-  return new Response(svg, {
-    headers: {
-      'Content-Type': 'image/svg+xml',
-      'Cache-Control': 'public, max-age=31536000',
-    },
-  });
-}
-
-function serveLogo() {
-  const svg = `<svg width="200" height="60" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Checkmark Icon with gradient -->
-  <defs>
-    <linearGradient id="checkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#5FFFB0;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#00D68F;stop-opacity:1" />
-    </linearGradient>
-    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#00ff88;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#0066ff;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  
-  <!-- Checkmark -->
-  <path d="M 10 30 L 20 40 L 40 15" 
-        stroke="url(#checkGradient)" 
-        stroke-width="6" 
-        stroke-linecap="round" 
-        stroke-linejoin="round" 
-        fill="none"/>
-  
-  <!-- FixCI Text with gradient -->
-  <text x="60" y="42" 
-        font-family="Arial, Helvetica, sans-serif" 
-        font-size="36" 
-        font-weight="900" 
-        fill="url(#textGradient)" 
-        letter-spacing="-1">FixCI</text>
-</svg>
-`;
-
-  return new Response(svg, {
-    headers: {
-      'Content-Type': 'image/svg+xml',
-      'Cache-Control': 'public, max-age=31536000',
-    },
-  });
-}
-
-function jsonResponse(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'content-type': 'application/json',
-      'access-control-allow-origin': '*',
-    },
-  });
-}
-
-function serveInstalledPage(url) {
-  const installation_id = url.searchParams.get('installation_id') || 'unknown';
-  const setup_action = url.searchParams.get('setup_action') || 'install';
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FixCI Installed Successfully!</title>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Space Mono', monospace;
-            background: #0a0e27;
-            color: #e8e9f3;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            padding: 2rem;
-        }
-        .container {
-            max-width: 700px;
-            width: 100%;
-            text-align: center;
-        }
-        .success-icon {
-            font-size: 4rem;
-            margin-bottom: 2rem;
-            animation: bounce 1s ease;
-        }
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-20px); }
-        }
-        h1 {
-            font-family: 'Syne', sans-serif;
-            font-size: clamp(2rem, 5vw, 2.5rem);
-            font-weight: 800;
-            margin-bottom: 1rem;
-            background: linear-gradient(135deg, #00ff88 0%, #0066ff 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        p {
-            font-size: clamp(0.95rem, 2vw, 1.1rem);
-            color: #8b8fa8;
-            margin-bottom: 2rem;
-            line-height: 1.6;
-        }
-        .installation-id {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 1.25rem;
-            margin: 2rem 0;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-        .installation-id code {
-            font-family: 'Space Mono', monospace;
-            color: #00ff88;
-            font-size: 1rem;
-            letter-spacing: 0.05em;
-        }
-        .copy-btn {
-            background: rgba(0, 255, 136, 0.1);
-            border: 1px solid rgba(0, 255, 136, 0.3);
-            color: #00ff88;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-family: 'Space Mono', monospace;
-            font-size: 0.85rem;
-            font-weight: 700;
-            transition: all 0.2s ease;
-        }
-        .copy-btn:hover {
-            background: rgba(0, 255, 136, 0.2);
-            transform: translateY(-1px);
-        }
-        .copy-btn.copied {
-            background: rgba(0, 255, 136, 0.2);
-            border-color: #00ff88;
-        }
-        .btn {
-            display: inline-block;
-            padding: 1rem 2rem;
-            background: linear-gradient(135deg, #00ff88 0%, #0066ff 100%);
-            color: #0a0e27;
-            text-decoration: none;
-            border-radius: 12px;
-            font-weight: 700;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
-        }
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 0 40px rgba(0, 255, 136, 0.5);
-        }
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.03);
-            color: #e8e9f3;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: none;
-            margin-left: 1rem;
-        }
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.05);
-            border-color: #00ff88;
-            box-shadow: none;
-        }
-        .next-steps {
-            margin-top: 3rem;
-            padding: 2rem;
-            background: rgba(0, 255, 136, 0.05);
-            border: 1px solid rgba(0, 255, 136, 0.2);
-            border-radius: 16px;
-            text-align: left;
-        }
-        .next-steps h2 {
-            font-family: 'Syne', sans-serif;
-            font-size: 1.5rem;
-            color: #00ff88;
-            margin-bottom: 1.5rem;
-        }
-        .next-steps ol {
-            margin-left: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .next-steps li {
-            margin-bottom: 1rem;
-            color: #e8e9f3;
-            line-height: 1.6;
-        }
-        .help-links {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid rgba(0, 255, 136, 0.1);
-            flex-wrap: wrap;
-        }
-        .help-link {
-            color: #00ff88;
-            text-decoration: none;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            transition: all 0.2s ease;
-        }
-        .help-link:hover {
-            color: #0066ff;
-            text-decoration: underline;
-        }
-        @media (max-width: 768px) {
-            .installation-id {
-                flex-direction: column;
-                text-align: center;
-            }
-            .btn-secondary {
-                margin-left: 0;
-                margin-top: 0.5rem;
-            }
-            .help-links {
-                flex-direction: column;
-                gap: 0.75rem;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="success-icon">✅</div>
-        <h1>FixCI is now active!</h1>
-        <p>Your CI/CD failures will be automatically analyzed and explained in plain English. Comments will appear on your PRs within seconds of a failure.</p>
-
-        <div class="installation-id">
-            <div>
-                <strong>Installation ID:</strong> <code>${installation_id}</code>
-            </div>
-            <button class="copy-btn" onclick="copyInstallationId()">Copy ID</button>
-        </div>
-
-        <div class="next-steps">
-            <h2>What happens next?</h2>
-            <ol>
-                <li><strong>Push code or create a PR</strong> in your selected repositories</li>
-                <li><strong>When a workflow fails</strong>, FixCI automatically analyzes the logs using AI</li>
-                <li><strong>Get instant answers</strong> via a PR comment explaining the root cause and suggested fixes</li>
-                <li><strong>View analysis details</strong> in the comment, including confidence scores and code examples</li>
-            </ol>
-
-            <div class="help-links">
-                <a href="https://github.com/apps/fixci-ai" class="help-link" target="_blank">
-                    ⚙️ Manage Repositories
-                </a>
-                <a href="https://fixci.dev" class="help-link" target="_blank">
-                    📚 Documentation
-                </a>
-            </div>
-        </div>
-
-        <p style="margin-top: 2rem;">
-            <a href="/" class="btn">← Back to FixCI</a>
-            <a href="https://github.com" class="btn btn-secondary" target="_blank">Go to GitHub</a>
-        </p>
-    </div>
-
-    <script>
-        function copyInstallationId() {
-            const id = '${installation_id}';
-            navigator.clipboard.writeText(id).then(() => {
-                const btn = document.querySelector('.copy-btn');
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                    btn.classList.remove('copied');
-                }, 2000);
-            });
-        }
-    </script>
-</body>
-</html>`;
-
-  return new Response(html, {
-    headers: {
-      'content-type': 'text/html;charset=UTF-8',
-    },
-  });
-}
-
-function serveLandingPage() {
-  const html = `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -434,7 +41,7 @@ function serveLandingPage() {
             right: 0;
             bottom: 0;
             z-index: -1;
-            background:
+            background: 
                 radial-gradient(circle at 20% 20%, rgba(0, 102, 255, 0.15) 0%, transparent 50%),
                 radial-gradient(circle at 80% 80%, rgba(0, 255, 136, 0.1) 0%, transparent 50%),
                 radial-gradient(circle at 50% 50%, rgba(255, 71, 87, 0.05) 0%, transparent 50%);
@@ -478,56 +85,14 @@ function serveLandingPage() {
         }
 
         .logo {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
             font-family: 'Syne', sans-serif;
             font-size: 1.5rem;
             font-weight: 800;
-            letter-spacing: -0.02em;
-        }
-
-        .logo img {
-            height: 36px;
-            width: auto;
-            filter: brightness(1.2) contrast(1.1);
-        }
-
-        @media (min-width: 769px) {
-            .logo img {
-                height: 44px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .logo img {
-                filter: brightness(1.3) contrast(1.2) drop-shadow(0 0 8px rgba(0, 255, 136, 0.3));
-            }
-        }
-
-        .logo-text {
             background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-        }
-
-        .nav-links {
-            display: flex;
-            align-items: center;
-            gap: 2rem;
-        }
-
-        .nav-link {
-            color: var(--text-dim);
-            text-decoration: none;
-            font-size: 0.95rem;
-            font-weight: 400;
-            transition: color 0.2s ease;
-        }
-
-        .nav-link:hover {
-            color: var(--primary);
+            letter-spacing: -0.02em;
         }
 
         .status-badge {
@@ -570,7 +135,7 @@ function serveLandingPage() {
         }
 
         .hero-content {
-            max-width: 1100px;
+            max-width: 900px;
             animation: fadeInUp 1s ease-out;
         }
 
@@ -587,18 +152,11 @@ function serveLandingPage() {
 
         h1 {
             font-family: 'Syne', sans-serif;
-            font-size: clamp(2.5rem, 8vw, 6rem);
+            font-size: clamp(2.5rem, 8vw, 5.5rem);
             font-weight: 800;
-            line-height: 1.15;
+            line-height: 1.1;
             margin-bottom: 1.5rem;
             letter-spacing: -0.03em;
-        }
-
-        @media (min-width: 769px) {
-            h1 {
-                font-size: clamp(3.5rem, 6vw, 6rem);
-                max-width: 1000px;
-            }
         }
 
         .gradient-text {
@@ -645,12 +203,6 @@ function serveLandingPage() {
         .btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 0 40px rgba(0, 255, 136, 0.5);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
         }
 
         .btn-secondary {
@@ -1048,31 +600,6 @@ function serveLandingPage() {
             opacity: 1;
             transform: translateY(0);
         }
-
-        /* Message styles */
-        .message {
-            display: none;
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
-            margin-top: 1rem;
-            font-size: 0.9rem;
-        }
-
-        .message.show {
-            display: block;
-        }
-
-        .message.success {
-            background: rgba(0, 255, 136, 0.1);
-            border: 1px solid var(--success);
-            color: var(--success);
-        }
-
-        .message.error {
-            background: rgba(255, 71, 87, 0.1);
-            border: 1px solid var(--error);
-            color: var(--error);
-        }
     </style>
 </head>
 <body>
@@ -1081,15 +608,10 @@ function serveLandingPage() {
 
     <nav>
         <div class="nav-content">
-            <div class="logo">
-                <img src="/logo.svg" alt="FixCI Logo">
-            </div>
-            <div class="nav-links">
-                <a href="https://github.com/fixci-ai/docs" class="nav-link" target="_blank">Docs</a>
-                <div class="status-badge">
-                    <span class="status-dot"></span>
-                    Coming Soon
-                </div>
+            <div class="logo">FixCI</div>
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                Coming Soon
             </div>
         </div>
     </nav>
@@ -1101,14 +623,15 @@ function serveLandingPage() {
         <div class="container">
             <div class="hero-content">
                 <h1>
-                    AI that explains <span class="gradient-text">why your pipeline broke</span>
+                    AI that explains <br>
+                    <span class="gradient-text">why your pipeline broke</span>
                 </h1>
                 <p class="hero-description">
                     Stop scrolling through cryptic build logs. FixCI analyzes CI/CD failures and tells you what went wrong — in plain English.
                 </p>
                 <div class="cta-group">
-                    <a href="/install" class="btn btn-primary" style="text-decoration: none; display: inline-block;">Add to GitHub</a>
-                    <button class="btn btn-secondary" onclick="scrollToWaitlist()">Join Waitlist</button>
+                    <button class="btn btn-primary">Join the Waitlist</button>
+                    <button class="btn btn-secondary">Watch Demo</button>
                 </div>
                 <div class="stats">
                     <div class="stat">
@@ -1269,18 +792,10 @@ function serveLandingPage() {
                 <p class="section-description" style="margin-top: 1rem;">
                     Join the waitlist and be first to try FixCI when we launch.
                 </p>
-                <form class="waitlist-form" id="waitlist-form">
-                    <input type="email" class="email-input" placeholder="your@email.com" required id="email-input">
-                    <input type="url" class="email-input" placeholder="https://github.com/yourname/your-repo" required id="repo-input" style="margin-top: 0.75rem;">
+                <form class="waitlist-form">
+                    <input type="email" class="email-input" placeholder="your@email.com" required>
                     <button type="submit" class="btn btn-primary">Join Waitlist</button>
                 </form>
-                <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.75rem;">
-                    Enter the GitHub repository where you want FixCI to analyze CI failures.
-                </p>
-                <div class="message success" id="success-message">
-                    You're on the list! We'll notify you when FixCI launches.
-                </div>
-                <div class="message error" id="error-message"></div>
                 <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 1rem;">
                     Free tier available. No spam, ever.
                 </p>
@@ -1297,12 +812,12 @@ function serveLandingPage() {
     <script>
         // Scroll reveal animation
         const reveals = document.querySelectorAll('.reveal');
-
+        
         const revealOnScroll = () => {
             reveals.forEach(element => {
                 const elementTop = element.getBoundingClientRect().top;
                 const windowHeight = window.innerHeight;
-
+                
                 if (elementTop < windowHeight - 100) {
                     element.classList.add('active');
                 }
@@ -1312,57 +827,24 @@ function serveLandingPage() {
         window.addEventListener('scroll', revealOnScroll);
         revealOnScroll(); // Initial check
 
-        // Scroll to waitlist function
-        function scrollToWaitlist() {
-            document.querySelector('.cta-section').scrollIntoView({
-                behavior: 'smooth'
-            });
-        }
-
         // Form submission
-        document.getElementById('waitlist-form').addEventListener('submit', async (e) => {
+        document.querySelector('.waitlist-form').addEventListener('submit', (e) => {
             e.preventDefault();
-            const email = document.getElementById('email-input').value;
-            const repository = document.getElementById('repo-input').value;
-            const button = e.target.querySelector('button');
-            const successEl = document.getElementById('success-message');
-            const errorEl = document.getElementById('error-message');
-            const form = document.getElementById('waitlist-form');
+            const email = e.target.querySelector('input').value;
+            alert(`Thanks for joining! We'll notify you at ${email} when FixCI launches.`);
+            e.target.reset();
+        });
 
-            button.disabled = true;
-            button.textContent = 'Joining...';
-            errorEl.classList.remove('show');
-            successEl.classList.remove('show');
-
-            try {
-                const res = await fetch('/api/waitlist', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, repository })
-                });
-
-                const data = await res.json();
-
-                if (res.ok) {
-                    form.style.display = 'none';
-                    successEl.classList.add('show');
-                } else {
-                    throw new Error(data.error || 'Something went wrong');
+        // Smooth scroll for buttons
+        document.querySelectorAll('.btn-primary').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.textContent.includes('Waitlist')) {
+                    document.querySelector('.cta-section').scrollIntoView({ 
+                        behavior: 'smooth' 
+                    });
                 }
-            } catch (err) {
-                errorEl.textContent = err.message;
-                errorEl.classList.add('show');
-                button.disabled = false;
-                button.textContent = 'Join Waitlist';
-            }
+            });
         });
     </script>
 </body>
-</html>`;
-
-  return new Response(html, {
-    headers: {
-      'content-type': 'text/html;charset=UTF-8',
-    },
-  });
-}
+</html>

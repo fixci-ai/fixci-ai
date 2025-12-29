@@ -29,6 +29,38 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# Secrets
+# Secrets and API Keys
 secrets/
 *.pem
+.admin-key
+.stripe-keys
+
+# Sensitive Documentation (internal only)
+packages/github-app/ADMIN_API.md
+ADMIN_*.md
+*_INTERNAL.md
+
+# Confluence documentation (upload directly to Confluence, not GitHub)
+docs/confluence/04-Database-Schema.md
+docs/confluence/05-API-Reference.md
+docs/confluence/06-Subscription-System.md
+
+# Session and deployment files
+SESSION_CONTEXT.md
+QUICK_RESUME.md
+SAAS_MODEL.md
+.claude/
+
+# Database backups (may contain sensitive data)
+*.db
+*.sqlite
+*.sql.backup
+*_backup.json
+
+# Test data that might contain real info
+test-data/
+fixtures/*.json
+
+# Admin dashboard config (may contain API keys)
+admin/config.json
+admin/.env

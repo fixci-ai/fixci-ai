@@ -1,5 +1,8 @@
 import { analyzeFailure } from './analyzer.js';
 import { getInstallationToken, getWorkflowJobs, getJobLogs, postPRComment, formatPRComment } from './github.js';
+import { canAnalyze, recordUsage, getSubscription, getTierConfig } from './subscription.js';
+import { handleStripeWebhook, createCheckoutSession, createPortalSession } from './stripe.js';
+import { listSubscriptions, grantSubscription, updateSubscriptionStatus, getSubscriptionDetails, resetUsage, getStats, listWaitlist } from './admin.js';
 
 /**
  * FixCI GitHub App - Webhook Handler
@@ -10,9 +13,183 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    // Handle CORS preflight requests
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Max-Age': '86400',
+        }
+      });
+    }
+
     // Health check endpoint
     if (url.pathname === '/health') {
-      return new Response('OK', { status: 200 });
+      return new Response('OK', {
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    // Stripe webhook endpoint
+    if (url.pathname === '/stripe/webhook' && request.method === 'POST') {
+      return handleStripeWebhook(request, env);
+    }
+
+    // Billing checkout endpoint
+    if (url.pathname === '/billing/checkout' && request.method === 'POST') {
+      const { installationId, tier } = await request.json();
+      const session = await createCheckoutSession(installationId, tier, env);
+      return jsonResponse({ url: session.url });
+    }
+
+    // Billing portal endpoint
+    if (url.pathname === '/billing/portal' && request.method === 'POST') {
+      const { installationId } = await request.json();
+      const session = await createPortalSession(installationId, env);
+      return jsonResponse({ url: session.url });
+    }
+
+    // API: Get subscription details
+    if (url.pathname === '/api/subscription' && request.method === 'GET') {
+      const installationId = url.searchParams.get('installation_id');
+      if (!installationId) {
+        return jsonResponse({ error: 'Missing installation_id parameter' }, 400);
+      }
+
+      const subscription = await getSubscription(parseInt(installationId), env);
+      const tierConfig = await getTierConfig(subscription.tier, env);
+
+      return jsonResponse({
+        subscription: {
+          tier: subscription.tier,
+          status: subscription.status,
+          analysesLimit: subscription.analyses_limit_monthly,
+          analysesUsed: subscription.analyses_used_current_period,
+          analysesRemaining: subscription.analyses_limit_monthly
+            ? subscription.analyses_limit_monthly - subscription.analyses_used_current_period
+            : null,
+          tokensUsed: subscription.tokens_used_current_period,
+          periodStart: subscription.current_period_start,
+          periodEnd: subscription.current_period_end,
+          overageAnalyses: subscription.overage_analyses || 0,
+          overageCost: subscription.overage_cost_usd || 0,
+        },
+        tierConfig: {
+          tier: tierConfig.tier,
+          price: tierConfig.price_monthly_usd,
+          features: tierConfig.features,
+          aiProviders: tierConfig.ai_providers,
+        }
+      });
+    }
+
+    // API: Get usage history
+    if (url.pathname === '/api/usage/history' && request.method === 'GET') {
+      const installationId = url.searchParams.get('installation_id');
+      const days = parseInt(url.searchParams.get('days') || '30');
+
+      if (!installationId) {
+        return jsonResponse({ error: 'Missing installation_id parameter' }, 400);
+      }
+
+      // Get daily usage stats
+      const since = new Date();
+      since.setDate(since.getDate() - days);
+      const sinceStr = since.toISOString().split('T')[0];
+
+      const history = await env.DB.prepare(`
+        SELECT
+          date,
+          SUM(analyses_count) as analyses,
+          SUM(tokens_used) as tokens,
+          SUM(api_calls) as api_calls
+        FROM usage_stats
+        WHERE repo_id IN (
+          SELECT id FROM repositories WHERE github_repo_id IN (
+            SELECT github_repo_id FROM repositories r
+            JOIN installations i ON r.owner = i.account_login
+            WHERE i.installation_id = ?
+          )
+        )
+        AND date >= ?
+        GROUP BY date
+        ORDER BY date DESC
+      `).bind(parseInt(installationId), sinceStr).all();
+
+      // Get recent analyses
+      const recentAnalyses = await env.DB.prepare(`
+        SELECT
+          a.id,
+          a.workflow_name,
+          a.commit_sha,
+          a.branch,
+          a.analysis_status,
+          a.ai_provider,
+          a.model_used,
+          a.confidence_score,
+          a.processing_time_ms,
+          a.token_count,
+          a.estimated_cost_usd,
+          a.created_at,
+          r.full_name as repository
+        FROM analyses a
+        JOIN repositories r ON a.repo_id = r.id
+        JOIN installations i ON r.owner = i.account_login
+        WHERE i.installation_id = ?
+        AND a.created_at >= ?
+        ORDER BY a.created_at DESC
+        LIMIT 20
+      `).bind(parseInt(installationId), sinceStr).all();
+
+      return jsonResponse({
+        dailyUsage: history.results,
+        recentAnalyses: recentAnalyses.results,
+        period: {
+          from: sinceStr,
+          to: new Date().toISOString().split('T')[0],
+          days
+        }
+      });
+    }
+
+    // Admin API: List all subscriptions
+    if (url.pathname === '/admin/subscriptions' && request.method === 'GET') {
+      return listSubscriptions(request, env);
+    }
+
+    // Admin API: Grant or change subscription tier
+    if (url.pathname === '/admin/subscriptions/grant' && request.method === 'POST') {
+      return grantSubscription(request, env);
+    }
+
+    // Admin API: Update subscription status (suspend/activate)
+    if (url.pathname === '/admin/subscriptions/status' && request.method === 'POST') {
+      return updateSubscriptionStatus(request, env);
+    }
+
+    // Admin API: Get detailed subscription info
+    if (url.pathname === '/admin/subscriptions/details' && request.method === 'GET') {
+      return getSubscriptionDetails(request, env);
+    }
+
+    // Admin API: Reset usage for an installation
+    if (url.pathname === '/admin/subscriptions/reset-usage' && request.method === 'POST') {
+      return resetUsage(request, env);
+    }
+
+    // Admin API: Get overall statistics
+    if (url.pathname === '/admin/stats' && request.method === 'GET') {
+      return getStats(request, env);
+    }
+
+    // Admin API: List waitlist entries
+    if (url.pathname === '/admin/waitlist' && request.method === 'GET') {
+      return listWaitlist(request, env);
     }
 
     // GitHub webhook endpoint
@@ -75,18 +252,28 @@ async function handleWebhook(request, env, ctx) {
 async function handleWorkflowRun(data, env, ctx) {
   const { action, workflow_run, repository, installation } = data;
 
-  // Check allowlist - only process workflows from approved accounts
-  const accountLogin = repository.owner.login;
-  const allowed = await env.DB.prepare(
-    'SELECT id FROM allowlist WHERE account_login = ?'
-  ).bind(accountLogin).first();
+  // Check subscription status and usage limits
+  const installationId = installation?.id;
+  if (!installationId) {
+    return jsonResponse({ error: 'Missing installation ID' }, 400);
+  }
 
-  if (!allowed) {
-    console.log(`Account ${accountLogin} not in allowlist, skipping`);
+  const usageCheck = await canAnalyze(installationId, env);
+  if (!usageCheck.allowed) {
+    console.log(`Analysis denied for installation ${installationId}: ${usageCheck.reason}`);
+
     return jsonResponse({
-      message: 'FixCI is currently in private beta. Join the waitlist at https://fixci.dev',
-      account: accountLogin
-    });
+      message: usageCheck.reason,
+      tier: usageCheck.subscription.tier,
+      analysesUsed: usageCheck.subscription.analyses_used_current_period,
+      analysesLimit: usageCheck.subscription.analyses_limit_monthly,
+      upgradeUrl: 'https://fixci.dev/pricing'
+    }, 403);
+  }
+
+  // Log if this is an overage analysis (Pro tier)
+  if (usageCheck.isOverage) {
+    console.log(`⚠️ Overage analysis for installation ${installationId} - will be charged`);
   }
 
   // Only process completed workflow runs that failed
@@ -325,12 +512,15 @@ async function processAnalysis(analysisId, workflowRun, repository, prNumber, in
       console.log(`Using step information for analysis`);
     }
 
+    // Get subscription tier for provider selection
+    const subscription = await getSubscription(installation.id, env);
+
     // Analyze the failure with AI
     const analysis = await analyzeFailure(logsToAnalyze, {
       workflowName: workflowRun.name,
       jobName: failedJob.name,
       errorMessage: null
-    }, env);
+    }, env, subscription.tier);
 
     // Update analysis record
     await env.DB.prepare(`
@@ -367,8 +557,20 @@ async function processAnalysis(analysisId, workflowRun, repository, prNumber, in
       analysisId
     ).run();
 
+    // Record usage for billing and tracking
+    await recordUsage(
+      installation.id,
+      analysisId,
+      analysis.input_tokens + analysis.output_tokens,
+      analysis.estimated_cost_usd,
+      env
+    );
+
+    // Get updated subscription info for PR comment
+    const updatedSubscription = await getSubscription(installation.id, env);
+
     // Post comment to PR
-    const comment = formatPRComment(analysis);
+    const comment = formatPRComment(analysis, updatedSubscription);
     await postPRComment(
       repository.owner.login,
       repository.name,
@@ -407,7 +609,10 @@ function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
-      'content-type': 'application/json',
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   });
 }

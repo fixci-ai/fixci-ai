@@ -1,0 +1,12 @@
+{
+  "name": "fixci-docs",
+  "version": "1.0.0",
+  "description": "FixCI Confluence documentation uploader",
+  "private": true,
+  "scripts": {
+    "upload": "node -r dotenv/config upload-to-confluence.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1"
+  }
+}

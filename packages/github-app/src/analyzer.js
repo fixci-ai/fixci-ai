@@ -7,15 +7,16 @@ import { analyzeWithCloudflare } from './providers/cloudflare.js';
 import { analyzeWithClaude } from './providers/claude.js';
 import { analyzeWithOpenAI } from './providers/openai.js';
 import { analyzeWithGemini } from './providers/gemini.js';
+import { getTierConfig } from './subscription.js';
 
 // Provider rotation counter (stored in global scope for round-robin)
 let providerIndex = 0;
 
 /**
  * Analyze CI/CD failure logs using configured AI providers
- * Automatically rotates between providers for cost comparison
+ * Selects provider based on subscription tier
  */
-export async function analyzeFailure(logs, context, env) {
+export async function analyzeFailure(logs, context, env, tier = 'free') {
   // Get available providers based on configured API keys
   const availableProviders = getAvailableProviders(env);
 
@@ -23,10 +24,10 @@ export async function analyzeFailure(logs, context, env) {
     throw new Error('No AI providers configured. Please set at least one API key.');
   }
 
-  // Select provider using round-robin rotation
-  const provider = selectProvider(availableProviders);
+  // Select provider based on subscription tier
+  const provider = await selectProvider(availableProviders, tier, env);
 
-  console.log(`Analyzing with provider: ${provider}`);
+  console.log(`Analyzing with provider: ${provider} (tier: ${tier})`);
 
   try {
     let result;
@@ -110,13 +111,53 @@ function getAvailableProviders(env) {
 }
 
 /**
- * Select provider using round-robin rotation
- * This ensures even distribution for cost comparison testing
+ * Select provider based on subscription tier
+ * - Free tier: Cloudflare AI or Gemini (cheapest)
+ * - Pro tier: Claude or OpenAI (best quality)
+ * - Enterprise: Intelligent selection based on complexity
  */
-function selectProvider(availableProviders) {
-  const provider = availableProviders[providerIndex];
-  providerIndex = (providerIndex + 1) % availableProviders.length;
-  return provider;
+async function selectProvider(availableProviders, tier, env) {
+  // Get tier configuration to see which providers are allowed
+  const tierConfig = await getTierConfig(tier, env);
+  const allowedProviders = tierConfig.ai_providers;
+
+  // Filter available providers by tier permissions
+  let eligibleProviders = availableProviders;
+  if (!allowedProviders.includes('all')) {
+    eligibleProviders = availableProviders.filter(p => allowedProviders.includes(p));
+  }
+
+  if (eligibleProviders.length === 0) {
+    console.warn(`No eligible providers for tier ${tier}, falling back to all available`);
+    eligibleProviders = availableProviders;
+  }
+
+  // Selection strategy based on tier
+  switch (tier) {
+    case 'free':
+      // Free tier: prefer cheapest providers (Cloudflare > Gemini)
+      if (eligibleProviders.includes('cloudflare')) return 'cloudflare';
+      if (eligibleProviders.includes('gemini')) return 'gemini';
+      return eligibleProviders[0];
+
+    case 'pro':
+      // Pro tier: prefer quality (Claude > OpenAI > Gemini > Cloudflare)
+      if (eligibleProviders.includes('claude')) return 'claude';
+      if (eligibleProviders.includes('openai')) return 'openai';
+      if (eligibleProviders.includes('gemini')) return 'gemini';
+      if (eligibleProviders.includes('cloudflare')) return 'cloudflare';
+      return eligibleProviders[0];
+
+    case 'enterprise':
+      // Enterprise: use round-robin for cost/quality balance
+      const provider = eligibleProviders[providerIndex % eligibleProviders.length];
+      providerIndex++;
+      return provider;
+
+    default:
+      // Fallback to first available
+      return eligibleProviders[0];
+  }
 }
 
 /**

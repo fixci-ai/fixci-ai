@@ -145,7 +145,28 @@ export async function getJobLogs(owner, repo, jobId, token) {
 /**
  * Format analysis as GitHub-flavored markdown comment
  */
-export function formatPRComment(analysis) {
+export function formatPRComment(analysis, subscription = null) {
+  // Format usage badge if subscription info is provided
+  let usageBadge = '';
+  if (subscription) {
+    if (subscription.tier === 'enterprise' || subscription.analyses_limit_monthly === null) {
+      usageBadge = '\n\n> **Plan:** Enterprise (Unlimited) ✨';
+    } else {
+      const remaining = subscription.analyses_limit_monthly - subscription.analyses_used_current_period;
+      const total = subscription.analyses_limit_monthly;
+      const used = subscription.analyses_used_current_period;
+
+      if (subscription.tier === 'free' && remaining <= 2) {
+        usageBadge = `\n\n> ⚠️ **Plan:** Free | ${remaining}/${total} analyses remaining this month\n> [Upgrade to Pro](https://fixci.dev/pricing) for unlimited analyses`;
+      } else if (subscription.tier === 'pro' && used > total) {
+        const overage = used - total;
+        usageBadge = `\n\n> **Plan:** Pro | ${used}/${total} analyses (${overage} overage this month)\n> Overages billed at $0.10 per analysis`;
+      } else {
+        usageBadge = `\n\n> **Plan:** ${subscription.tier} | ${remaining}/${total} analyses remaining | [Upgrade](https://fixci.dev/pricing)`;
+      }
+    }
+  }
+
   return `## 🔧 FixCI Analysis
 
 **${analysis.issue_summary}**
@@ -160,7 +181,7 @@ ${analysis.code_example ? `### Code Example
 \`\`\`
 ${analysis.code_example}
 \`\`\`
-` : ''}
+` : ''}${usageBadge}
 
 ---
 *Analysis confidence: ${Math.round(analysis.confidence_score * 100)}% | Model: ${analysis.model_used} | Processed in ${analysis.processing_time_ms}ms*

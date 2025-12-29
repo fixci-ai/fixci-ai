@@ -1,0 +1,20 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="60" cy="60" r="55" fill="#1a1d2e"/>
+  
+  <!-- Checkmark Icon -->
+  <defs>
+    <linearGradient id="checkGradientIcon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5FFFB0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00D68F;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Checkmark shape centered -->
+  <path d="M 35 60 L 52 77 L 85 40" 
+        stroke="url(#checkGradientIcon)" 
+        stroke-width="12" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" 
+        fill="none"/>
+</svg>
