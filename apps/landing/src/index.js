@@ -2,9 +2,32 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // Serve logo
+    if (url.pathname === '/logo.svg' || url.pathname === '/logo.png') {
+      return serveLogo();
+    }
+
+    // Serve favicon
+    if (url.pathname === '/favicon.svg') {
+      return serveLogo();
+    }
+
     // Handle API requests
     if (url.pathname === '/api/waitlist' && request.method === 'POST') {
       return handleWaitlistSignup(request, env);
+    }
+
+    // Redirect to GitHub App installation
+    if (url.pathname === '/install') {
+      return Response.redirect(
+        'https://github.com/apps/fixci-ai/installations/new',
+        302
+      );
+    }
+
+    // Post-installation success page
+    if (url.pathname === '/installed') {
+      return serveInstalledPage(url);
     }
 
     // Serve landing page
@@ -35,6 +58,78 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+
+function serveFavicon() {
+  const svg = `<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="60" cy="60" r="55" fill="#1a1d2e"/>
+  
+  <!-- Checkmark Icon -->
+  <defs>
+    <linearGradient id="checkGradientIcon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5FFFB0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00D68F;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Checkmark shape centered -->
+  <path d="M 35 60 L 52 77 L 85 40" 
+        stroke="url(#checkGradientIcon)" 
+        stroke-width="12" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" 
+        fill="none"/>
+</svg>
+`;
+
+  return new Response(svg, {
+    headers: {
+      'Content-Type': 'image/svg+xml',
+      'Cache-Control': 'public, max-age=31536000',
+    },
+  });
+}
+
+function serveLogo() {
+  const svg = `<svg width="200" height="60" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Checkmark Icon with gradient -->
+  <defs>
+    <linearGradient id="checkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5FFFB0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00D68F;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00ff88;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0066ff;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Checkmark -->
+  <path d="M 10 30 L 20 40 L 40 15" 
+        stroke="url(#checkGradient)" 
+        stroke-width="6" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" 
+        fill="none"/>
+  
+  <!-- FixCI Text with gradient -->
+  <text x="60" y="42" 
+        font-family="Arial, Helvetica, sans-serif" 
+        font-size="36" 
+        font-weight="900" 
+        fill="url(#textGradient)" 
+        letter-spacing="-1">FixCI</text>
+</svg>
+`;
+
+  return new Response(svg, {
+    headers: {
+      'Content-Type': 'image/svg+xml',
+      'Cache-Control': 'public, max-age=31536000',
+    },
+  });
+}
+
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -45,551 +140,1214 @@ function jsonResponse(data, status = 200) {
   });
 }
 
+function serveInstalledPage(url) {
+  const installation_id = url.searchParams.get('installation_id') || 'unknown';
+  const setup_action = url.searchParams.get('setup_action') || 'install';
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FixCI Installed Successfully!</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Space Mono', monospace;
+            background: #0a0e27;
+            color: #e8e9f3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 700px;
+            width: 100%;
+            text-align: center;
+        }
+        .success-icon {
+            font-size: 4rem;
+            margin-bottom: 2rem;
+            animation: bounce 1s ease;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        h1 {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(2rem, 5vw, 2.5rem);
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #00ff88 0%, #0066ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        p {
+            font-size: clamp(0.95rem, 2vw, 1.1rem);
+            color: #8b8fa8;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        .installation-id {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin: 2rem 0;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .installation-id code {
+            font-family: 'Space Mono', monospace;
+            color: #00ff88;
+            font-size: 1rem;
+            letter-spacing: 0.05em;
+        }
+        .copy-btn {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            color: #00ff88;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 700;
+            transition: all 0.2s ease;
+        }
+        .copy-btn:hover {
+            background: rgba(0, 255, 136, 0.2);
+            transform: translateY(-1px);
+        }
+        .copy-btn.copied {
+            background: rgba(0, 255, 136, 0.2);
+            border-color: #00ff88;
+        }
+        .btn {
+            display: inline-block;
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, #00ff88 0%, #0066ff 100%);
+            color: #0a0e27;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 700;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 40px rgba(0, 255, 136, 0.5);
+        }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.03);
+            color: #e8e9f3;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: none;
+            margin-left: 1rem;
+        }
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: #00ff88;
+            box-shadow: none;
+        }
+        .next-steps {
+            margin-top: 3rem;
+            padding: 2rem;
+            background: rgba(0, 255, 136, 0.05);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 16px;
+            text-align: left;
+        }
+        .next-steps h2 {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.5rem;
+            color: #00ff88;
+            margin-bottom: 1.5rem;
+        }
+        .next-steps ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .next-steps li {
+            margin-bottom: 1rem;
+            color: #e8e9f3;
+            line-height: 1.6;
+        }
+        .help-links {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(0, 255, 136, 0.1);
+            flex-wrap: wrap;
+        }
+        .help-link {
+            color: #00ff88;
+            text-decoration: none;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+        .help-link:hover {
+            color: #0066ff;
+            text-decoration: underline;
+        }
+        @media (max-width: 768px) {
+            .installation-id {
+                flex-direction: column;
+                text-align: center;
+            }
+            .btn-secondary {
+                margin-left: 0;
+                margin-top: 0.5rem;
+            }
+            .help-links {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">✅</div>
+        <h1>FixCI is now active!</h1>
+        <p>Your CI/CD failures will be automatically analyzed and explained in plain English. Comments will appear on your PRs within seconds of a failure.</p>
+
+        <div class="installation-id">
+            <div>
+                <strong>Installation ID:</strong> <code>${installation_id}</code>
+            </div>
+            <button class="copy-btn" onclick="copyInstallationId()">Copy ID</button>
+        </div>
+
+        <div class="next-steps">
+            <h2>What happens next?</h2>
+            <ol>
+                <li><strong>Push code or create a PR</strong> in your selected repositories</li>
+                <li><strong>When a workflow fails</strong>, FixCI automatically analyzes the logs using AI</li>
+                <li><strong>Get instant answers</strong> via a PR comment explaining the root cause and suggested fixes</li>
+                <li><strong>View analysis details</strong> in the comment, including confidence scores and code examples</li>
+            </ol>
+
+            <div class="help-links">
+                <a href="https://github.com/apps/fixci-ai" class="help-link" target="_blank">
+                    ⚙️ Manage Repositories
+                </a>
+                <a href="https://fixci.dev" class="help-link" target="_blank">
+                    📚 Documentation
+                </a>
+            </div>
+        </div>
+
+        <p style="margin-top: 2rem;">
+            <a href="/" class="btn">← Back to FixCI</a>
+            <a href="https://github.com" class="btn btn-secondary" target="_blank">Go to GitHub</a>
+        </p>
+    </div>
+
+    <script>
+        function copyInstallationId() {
+            const id = '${installation_id}';
+            navigator.clipboard.writeText(id).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: {
+      'content-type': 'text/html;charset=UTF-8',
+    },
+  });
+}
+
 function serveLandingPage() {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FixCI - AI that explains why your pipeline broke</title>
-  <meta name="description" content="Stop scrolling through cryptic build logs. FixCI uses AI to explain CI/CD failures in plain English and suggests fixes in seconds.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔧</text></svg>">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FixCI - AI that explains why your pipeline broke</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    :root {
-      --primary: #10b981;
-      --primary-dark: #059669;
-      --bg: #0f172a;
-      --bg-light: #1e293b;
-      --text: #f1f5f9;
-      --text-muted: #94a3b8;
-      --border: #334155;
-    }
+        :root {
+            --primary: #00ff88;
+            --secondary: #0066ff;
+            --dark: #0a0e27;
+            --darker: #050810;
+            --text: #e8e9f3;
+            --text-dim: #8b8fa8;
+            --error: #ff4757;
+            --success: #00ff88;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
+        }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      min-height: 100vh;
-    }
+        body {
+            font-family: 'Space Mono', monospace;
+            background: var(--darker);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
 
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
+        /* Animated gradient background */
+        .gradient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: -1;
+            background:
+                radial-gradient(circle at 20% 20%, rgba(0, 102, 255, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(0, 255, 136, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(255, 71, 87, 0.05) 0%, transparent 50%);
+            animation: gradientShift 20s ease infinite;
+        }
 
-    nav {
-      padding: 24px 0;
-      border-bottom: 1px solid var(--border);
-    }
+        @keyframes gradientShift {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
 
-    .logo {
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--text);
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.03;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
 
-    .logo-icon {
-      background: var(--primary);
-      color: var(--bg);
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      font-weight: 800;
-    }
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 1.5rem 2rem;
+            backdrop-filter: blur(20px);
+            background: rgba(10, 14, 39, 0.8);
+            border-bottom: 1px solid var(--border);
+        }
 
-    .hero {
-      padding: 80px 0 60px;
-      text-align: center;
-    }
+        .nav-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
-    .badge {
-      display: inline-block;
-      background: var(--bg-light);
-      border: 1px solid var(--border);
-      padding: 6px 14px;
-      border-radius: 50px;
-      font-size: 14px;
-      color: var(--text-muted);
-      margin-bottom: 24px;
-    }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-family: 'Syne', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
 
-    .badge span {
-      color: var(--primary);
-    }
+        .logo img {
+            height: 36px;
+            width: auto;
+            filter: brightness(1.2) contrast(1.1);
+        }
 
-    h1 {
-      font-size: clamp(36px, 6vw, 56px);
-      font-weight: 800;
-      line-height: 1.1;
-      margin-bottom: 24px;
-      letter-spacing: -1px;
-    }
+        @media (min-width: 769px) {
+            .logo img {
+                height: 44px;
+            }
+        }
 
-    .highlight {
-      color: var(--primary);
-    }
+        @media (max-width: 768px) {
+            .logo img {
+                filter: brightness(1.3) contrast(1.2) drop-shadow(0 0 8px rgba(0, 255, 136, 0.3));
+            }
+        }
 
-    .subtitle {
-      font-size: 20px;
-      color: var(--text-muted);
-      max-width: 600px;
-      margin: 0 auto 40px;
-    }
+        .logo-text {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
 
-    .email-form {
-      display: flex;
-      gap: 12px;
-      max-width: 440px;
-      margin: 0 auto;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
 
-    .email-input {
-      flex: 1;
-      min-width: 240px;
-      padding: 16px 20px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--bg-light);
-      color: var(--text);
-      font-size: 16px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
+        .nav-link {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 400;
+            transition: color 0.2s ease;
+        }
 
-    .email-input:focus {
-      border-color: var(--primary);
-    }
+        .nav-link:hover {
+            color: var(--primary);
+        }
 
-    .email-input::placeholder {
-      color: var(--text-muted);
-    }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-size: 0.85rem;
+        }
 
-    .submit-btn {
-      padding: 16px 28px;
-      background: var(--primary);
-      color: var(--bg);
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--primary);
+            animation: pulse 2s ease-in-out infinite;
+        }
 
-    .submit-btn:hover {
-      background: var(--primary-dark);
-    }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
 
-    .submit-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
 
-    .form-note {
-      width: 100%;
-      text-align: center;
-      font-size: 14px;
-      color: var(--text-muted);
-      margin-top: 12px;
-    }
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding-top: 100px;
+            position: relative;
+        }
 
-    .problem {
-      padding: 60px 0;
-      border-top: 1px solid var(--border);
-    }
+        .hero-content {
+            max-width: 1100px;
+            animation: fadeInUp 1s ease-out;
+        }
 
-    .section-label {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--primary);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 16px;
-    }
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
-    h2 {
-      font-size: 32px;
-      font-weight: 700;
-      margin-bottom: 24px;
-    }
+        h1 {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(2.5rem, 8vw, 6rem);
+            font-weight: 800;
+            line-height: 1.15;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.03em;
+        }
 
-    .problem-text {
-      color: var(--text-muted);
-      font-size: 18px;
-      margin-bottom: 32px;
-    }
+        @media (min-width: 769px) {
+            h1 {
+                font-size: clamp(3.5rem, 6vw, 6rem);
+                max-width: 1000px;
+            }
+        }
 
-    .code-block {
-      background: #0d1117;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
-    }
+        .gradient-text {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: inline-block;
+        }
 
-    .code-header {
-      background: var(--bg-light);
-      padding: 12px 16px;
-      font-size: 13px;
-      color: var(--text-muted);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+        .hero-description {
+            font-size: clamp(1rem, 2vw, 1.25rem);
+            color: var(--text-dim);
+            margin-bottom: 2.5rem;
+            max-width: 600px;
+        }
 
-    .code-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: #f85149;
-    }
+        .cta-group {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
 
-    .code-content {
-      padding: 20px;
-      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-      font-size: 13px;
-      line-height: 1.7;
-      overflow-x: auto;
-    }
+        .btn {
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-family: 'Space Mono', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            position: relative;
+            overflow: hidden;
+        }
 
-    .code-line {
-      color: var(--text-muted);
-    }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: var(--darker);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+        }
 
-    .code-error {
-      color: #f85149;
-    }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 40px rgba(0, 255, 136, 0.5);
+        }
 
-    .solution {
-      padding: 60px 0;
-      border-top: 1px solid var(--border);
-    }
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
 
-    .solution-box {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.02) 100%);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      border-radius: 12px;
-      padding: 32px;
-    }
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(10px);
+        }
 
-    .solution-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
-    }
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--primary);
+        }
 
-    .solution-icon {
-      width: 40px;
-      height: 40px;
-      background: var(--primary);
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-    }
+        .stats {
+            display: flex;
+            gap: 2rem;
+            margin-top: 3rem;
+            animation: fadeInUp 1s ease-out 0.3s backwards;
+        }
 
-    .solution-title {
-      font-size: 18px;
-      font-weight: 600;
-    }
+        .stat {
+            display: flex;
+            flex-direction: column;
+        }
 
-    .solution-text {
-      color: var(--text-muted);
-      font-size: 16px;
-      margin-bottom: 20px;
-    }
+        .stat-number {
+            font-family: 'Syne', sans-serif;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
 
-    .solution-fix {
-      background: var(--bg);
-      border-radius: 8px;
-      padding: 16px;
-      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-      font-size: 14px;
-      color: var(--primary);
-    }
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+        }
 
-    .how {
-      padding: 60px 0;
-      border-top: 1px solid var(--border);
-    }
+        /* Problem Section */
+        .section {
+            padding: 8rem 0;
+            position: relative;
+        }
 
-    .steps {
-      display: grid;
-      gap: 24px;
-      margin-top: 32px;
-    }
+        .section-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
 
-    .step {
-      display: flex;
-      gap: 20px;
-      align-items: flex-start;
-    }
+        .section-tag {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: var(--primary);
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
 
-    .step-num {
-      width: 40px;
-      height: 40px;
-      background: var(--bg-light);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      flex-shrink: 0;
-    }
+        h2 {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
 
-    .step-content h3 {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
+        .section-description {
+            font-size: 1.1rem;
+            color: var(--text-dim);
+            max-width: 600px;
+            margin: 0 auto;
+        }
 
-    .step-content p {
-      color: var(--text-muted);
-      font-size: 15px;
-    }
+        /* Code Example Card */
+        .code-comparison {
+            display: grid;
+            gap: 2rem;
+            margin-top: 4rem;
+        }
 
-    .cta {
-      padding: 80px 0;
-      text-align: center;
-      border-top: 1px solid var(--border);
-    }
+        .code-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
 
-    .cta h2 {
-      margin-bottom: 16px;
-    }
+        .code-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.1);
+        }
 
-    .cta p {
-      color: var(--text-muted);
-      margin-bottom: 32px;
-    }
+        .code-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
 
-    footer {
-      padding: 32px 0;
-      border-top: 1px solid var(--border);
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 14px;
-    }
+        .code-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.9rem;
+            color: var(--text-dim);
+        }
 
-    .success-message {
-      display: none;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid var(--primary);
-      padding: 16px 24px;
-      border-radius: 8px;
-      color: var(--primary);
-      font-weight: 500;
-    }
+        .status-icon {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
 
-    .success-message.show {
-      display: block;
-    }
+        .status-error {
+            background: var(--error);
+            box-shadow: 0 0 10px var(--error);
+        }
 
-    .error-message {
-      display: none;
-      background: rgba(248, 81, 73, 0.1);
-      border: 1px solid #f85149;
-      padding: 16px 24px;
-      border-radius: 8px;
-      color: #f85149;
-      font-weight: 500;
-      margin-top: 12px;
-    }
+        .status-success {
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success);
+        }
 
-    .error-message.show {
-      display: block;
-    }
+        .code-content {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 1.5rem;
+            font-size: 0.9rem;
+            line-height: 1.8;
+            overflow-x: auto;
+        }
 
-    .email-form.hidden {
-      display: none;
-    }
+        .code-line {
+            opacity: 0;
+            animation: typeIn 0.5s ease forwards;
+        }
 
-    @media (max-width: 480px) {
-      .hero { padding: 60px 0 40px; }
-      .email-form { flex-direction: column; }
-      .email-input { min-width: 100%; }
-      .submit-btn { width: 100%; }
-    }
-  </style>
+        .code-line:nth-child(1) { animation-delay: 0.1s; }
+        .code-line:nth-child(2) { animation-delay: 0.2s; }
+        .code-line:nth-child(3) { animation-delay: 0.3s; }
+        .code-line:nth-child(4) { animation-delay: 0.4s; }
+        .code-line:nth-child(5) { animation-delay: 0.5s; }
+
+        @keyframes typeIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .error-text {
+            color: var(--error);
+        }
+
+        .success-text {
+            color: var(--success);
+        }
+
+        .dim-text {
+            color: var(--text-dim);
+        }
+
+        /* Solution Card */
+        .solution-card {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.05) 0%, rgba(0, 102, 255, 0.05) 100%);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+        }
+
+        .solution-content {
+            margin-top: 1.5rem;
+        }
+
+        .solution-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .solution-label {
+            color: var(--primary);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        /* How It Works */
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 4rem;
+        }
+
+        .step {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2.5rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .step:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+            box-shadow: 0 10px 40px rgba(0, 255, 136, 0.1);
+        }
+
+        .step-number {
+            font-family: 'Syne', sans-serif;
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+        }
+
+        .step h3 {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .step p {
+            color: var(--text-dim);
+        }
+
+        /* Integrations */
+        .integrations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+
+        .integration-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .integration-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-3px);
+        }
+
+        .integration-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            text-align: center;
+            padding: 8rem 2rem;
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.05) 0%, rgba(0, 102, 255, 0.05) 100%);
+            border-radius: 24px;
+            margin: 4rem 0;
+        }
+
+        .waitlist-form {
+            max-width: 500px;
+            margin: 2rem auto 0;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .email-input {
+            flex: 1;
+            padding: 1rem 1.5rem;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            font-family: 'Space Mono', monospace;
+            font-size: 1rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .email-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
+        }
+
+        .email-input::placeholder {
+            color: var(--text-dim);
+        }
+
+        /* Footer */
+        footer {
+            padding: 3rem 2rem;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--text-dim);
+        }
+
+        /* Floating elements */
+        .floating-element {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 102, 255, 0.1) 100%);
+            filter: blur(40px);
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .floating-element:nth-child(1) {
+            top: 20%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .floating-element:nth-child(2) {
+            top: 60%;
+            right: 10%;
+            animation-delay: 2s;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            nav {
+                padding: 1rem;
+            }
+
+            .hero {
+                padding-top: 80px;
+            }
+
+            h1 {
+                font-size: 2.5rem;
+            }
+
+            .cta-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .stats {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .section {
+                padding: 4rem 0;
+            }
+
+            .waitlist-form {
+                flex-direction: column;
+            }
+
+            .steps {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Scroll reveal animation */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.6s ease;
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Message styles */
+        .message {
+            display: none;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .message.show {
+            display: block;
+        }
+
+        .message.success {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+
+        .message.error {
+            background: rgba(255, 71, 87, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+        }
+    </style>
 </head>
 <body>
-  <nav>
-    <div class="container">
-      <a href="/" class="logo">
-        <div class="logo-icon">F</div>
-        FixCI
-      </a>
-    </div>
-  </nav>
+    <div class="gradient-bg"></div>
+    <div class="noise-overlay"></div>
 
-  <section class="hero">
-    <div class="container">
-      <div class="badge">Coming Soon — Join the waitlist</div>
-      <h1>AI that explains why your <span class="highlight">pipeline broke</span></h1>
-      <p class="subtitle">Stop scrolling through cryptic build logs. FixCI analyzes CI/CD failures and tells you what went wrong — in plain English.</p>
-
-      <form class="email-form" id="waitlist-form">
-        <input type="email" class="email-input" placeholder="you@company.com" required id="email-input">
-        <button type="submit" class="submit-btn">Join Waitlist</button>
-        <p class="form-note">Free tier available. No spam, ever.</p>
-      </form>
-      <div class="success-message" id="success-message">
-        You're on the list! We'll notify you when FixCI launches.
-      </div>
-      <div class="error-message" id="error-message"></div>
-    </div>
-  </section>
-
-  <section class="problem">
-    <div class="container">
-      <div class="section-label">The Problem</div>
-      <h2>CI failures waste hours of your time</h2>
-      <p class="problem-text">Your build failed. Now you're scrolling through 500 lines of logs, searching Stack Overflow, and context-switching away from actual work.</p>
-
-      <div class="code-block">
-        <div class="code-header">
-          <div class="code-dot"></div>
-          GitHub Actions — build failed
+    <nav>
+        <div class="nav-content">
+            <div class="logo">
+                <img src="/logo.svg" alt="FixCI Logo">
+            </div>
+            <div class="nav-links">
+                <a href="https://github.com/fixci-ai/docs" class="nav-link" target="_blank">Docs</a>
+                <div class="status-badge">
+                    <span class="status-dot"></span>
+                    Coming Soon
+                </div>
+            </div>
         </div>
-        <div class="code-content">
-          <div class="code-line">Run npm test</div>
-          <div class="code-line">FAIL src/components/Auth.test.tsx</div>
-          <div class="code-error">  Auth › should redirect after login</div>
-          <div class="code-error">    TypeError: Cannot read properties of undefined (reading 'push')</div>
-          <div class="code-line">      at Object.&lt;anonymous&gt; (src/components/Auth.test.tsx:42:18)</div>
-          <div class="code-line">      at Promise.then.completed (node_modules/jest/build/jest.js:123:45)</div>
-          <div class="code-error">Error: Process completed with exit code 1.</div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="floating-element"></div>
+        <div class="floating-element"></div>
+        <div class="container">
+            <div class="hero-content">
+                <h1>
+                    AI that explains <span class="gradient-text">why your pipeline broke</span>
+                </h1>
+                <p class="hero-description">
+                    Stop scrolling through cryptic build logs. FixCI analyzes CI/CD failures and tells you what went wrong — in plain English.
+                </p>
+                <div class="cta-group">
+                    <a href="/install" class="btn btn-primary" style="text-decoration: none; display: inline-block;">Add to GitHub</a>
+                    <button class="btn btn-secondary" onclick="scrollToWaitlist()">Join Waitlist</button>
+                </div>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-number">500+</div>
+                        <div class="stat-label">Developers waiting</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">3min</div>
+                        <div class="stat-label">Average debug time</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">100%</div>
+                        <div class="stat-label">Free tier</div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="solution">
-    <div class="container">
-      <div class="section-label">The Solution</div>
-      <h2>Get answers in seconds, not hours</h2>
-      <p class="problem-text">FixCI reads your logs, understands the context, and explains exactly what went wrong and how to fix it.</p>
+    <!-- Problem Section -->
+    <section class="section">
+        <div class="container">
+            <div class="section-header reveal">
+                <div class="section-tag">The Problem</div>
+                <h2>CI failures waste <span class="gradient-text">hours</span> of your time</h2>
+                <p class="section-description">
+                    Your build failed. Now you're scrolling through 500 lines of logs, searching Stack Overflow, and context-switching away from actual work.
+                </p>
+            </div>
 
-      <div class="solution-box">
-        <div class="solution-header">
-          <div class="solution-icon">🔧</div>
-          <div class="solution-title">FixCI Analysis</div>
+            <div class="code-comparison">
+                <div class="code-card reveal">
+                    <div class="code-header">
+                        <div class="code-title">
+                            <span class="status-icon status-error"></span>
+                            GitHub Actions — build failed
+                        </div>
+                    </div>
+                    <div class="code-content">
+                        <div class="code-line dim-text">Run npm test</div>
+                        <div class="code-line"></div>
+                        <div class="code-line error-text">FAIL src/components/Auth.test.tsx</div>
+                        <div class="code-line">  Auth › should redirect after login</div>
+                        <div class="code-line error-text">  TypeError: Cannot read properties of undefined (reading 'push')</div>
+                        <div class="code-line dim-text">    at Object.&lt;anonymous&gt; (src/components/Auth.test.tsx:42:18)</div>
+                        <div class="code-line dim-text">    at Promise.then.completed (node_modules/jest/build/jest.js:123:45)</div>
+                        <div class="code-line"></div>
+                        <div class="code-line error-text">Error: Process completed with exit code 1.</div>
+                    </div>
+                </div>
+
+                <div class="code-card solution-card reveal">
+                    <div class="code-header">
+                        <div class="code-title">
+                            <span class="status-icon status-success"></span>
+                            🔧 FixCI Analysis
+                        </div>
+                    </div>
+                    <div class="solution-content">
+                        <div class="solution-section">
+                            <div class="solution-label">Issue:</div>
+                            <p>The test is failing because <code>useNavigate()</code> returns undefined in the test environment. This happens when the component isn't wrapped in a Router context during testing.</p>
+                        </div>
+                        <div class="solution-section">
+                            <div class="solution-label">Fix:</div>
+                            <p>Wrap your test component with <code>&lt;MemoryRouter&gt;</code> from react-router-dom in your test setup.</p>
+                        </div>
+                        <div class="solution-section">
+                            <div class="solution-label">Code Example:</div>
+                            <div class="code-content">
+                                <div class="code-line success-text">import { MemoryRouter } from 'react-router-dom';</div>
+                                <div class="code-line"></div>
+                                <div class="code-line">render(</div>
+                                <div class="code-line">  &lt;MemoryRouter&gt;</div>
+                                <div class="code-line">    &lt;Auth /&gt;</div>
+                                <div class="code-line">  &lt;/MemoryRouter&gt;</div>
+                                <div class="code-line">);</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <p class="solution-text"><strong>Issue:</strong> The test is failing because <code>useNavigate()</code> returns undefined in the test environment. This happens when the component isn't wrapped in a Router context during testing.</p>
-        <div class="solution-fix">
-          <strong>Fix:</strong> Wrap your test component with &lt;MemoryRouter&gt; from react-router-dom in your test setup.
+    </section>
+
+    <!-- How It Works -->
+    <section class="section">
+        <div class="container">
+            <div class="section-header reveal">
+                <div class="section-tag">How It Works</div>
+                <h2>Three steps to <span class="gradient-text">faster debugging</span></h2>
+            </div>
+
+            <div class="steps">
+                <div class="step reveal">
+                    <div class="step-number">01</div>
+                    <h3>Connect your repo</h3>
+                    <p>Install the GitHub App with one click. Works with GitHub Actions, GitLab CI, CircleCI, and more.</p>
+                </div>
+
+                <div class="step reveal">
+                    <div class="step-number">02</div>
+                    <h3>Pipeline fails</h3>
+                    <p>FixCI automatically detects failures and analyzes the logs using advanced AI models.</p>
+                </div>
+
+                <div class="step reveal">
+                    <div class="step-number">03</div>
+                    <h3>Get instant answers</h3>
+                    <p>Receive a Slack message or PR comment explaining the issue and how to fix it — in seconds.</p>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="how">
-    <div class="container">
-      <div class="section-label">How It Works</div>
-      <h2>Three steps to faster debugging</h2>
+    <!-- Integrations -->
+    <section class="section">
+        <div class="container">
+            <div class="section-header reveal">
+                <div class="section-tag">Integrations</div>
+                <h2>Works with your <span class="gradient-text">existing tools</span></h2>
+            </div>
 
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <div class="step-content">
-            <h3>Connect your repo</h3>
-            <p>Install the GitHub App with one click. Works with GitHub Actions, GitLab CI, CircleCI.</p>
-          </div>
+            <div class="integrations-grid">
+                <div class="integration-card reveal">
+                    <div class="integration-icon">⚡</div>
+                    <div>GitHub Actions</div>
+                </div>
+                <div class="integration-card reveal">
+                    <div class="integration-icon">🦊</div>
+                    <div>GitLab CI</div>
+                </div>
+                <div class="integration-card reveal">
+                    <div class="integration-icon">🔵</div>
+                    <div>CircleCI</div>
+                </div>
+                <div class="integration-card reveal">
+                    <div class="integration-icon">💬</div>
+                    <div>Slack</div>
+                </div>
+                <div class="integration-card reveal">
+                    <div class="integration-icon">📧</div>
+                    <div>Email</div>
+                </div>
+                <div class="integration-card reveal">
+                    <div class="integration-icon">🔔</div>
+                    <div>Discord</div>
+                </div>
+            </div>
         </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <div class="step-content">
-            <h3>Pipeline fails</h3>
-            <p>FixCI automatically detects failures and analyzes the logs using AI.</p>
-          </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="section">
+        <div class="container">
+            <div class="cta-section reveal">
+                <h2>Ship faster. <span class="gradient-text">Debug less.</span></h2>
+                <p class="section-description" style="margin-top: 1rem;">
+                    Join the waitlist and be first to try FixCI when we launch.
+                </p>
+                <form class="waitlist-form" id="waitlist-form">
+                    <input type="email" class="email-input" placeholder="your@email.com" required id="email-input">
+                    <button type="submit" class="btn btn-primary">Join Waitlist</button>
+                </form>
+                <div class="message success" id="success-message">
+                    You're on the list! We'll notify you when FixCI launches.
+                </div>
+                <div class="message error" id="error-message"></div>
+                <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 1rem;">
+                    Free tier available. No spam, ever.
+                </p>
+            </div>
         </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <div class="step-content">
-            <h3>Get instant answers</h3>
-            <p>Receive a Slack message or PR comment explaining the issue and how to fix it.</p>
-          </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            © 2025 FixCI. Built for developers who hate debugging CI.
         </div>
-      </div>
-    </div>
-  </section>
+    </footer>
 
-  <section class="cta">
-    <div class="container">
-      <h2>Ship faster. Debug less.</h2>
-      <p>Join the waitlist and be first to try FixCI when we launch.</p>
-      <form class="email-form" id="waitlist-form-2">
-        <input type="email" class="email-input" placeholder="you@company.com" required>
-        <button type="submit" class="submit-btn">Join Waitlist</button>
-      </form>
-      <div class="success-message" id="success-message-2">
-        You're on the list! We'll notify you when FixCI launches.
-      </div>
-      <div class="error-message" id="error-message-2"></div>
-    </div>
-  </section>
+    <script>
+        // Scroll reveal animation
+        const reveals = document.querySelectorAll('.reveal');
 
-  <footer>
-    <div class="container">
-      <p>© 2025 FixCI. Built for developers who hate debugging CI.</p>
-    </div>
-  </footer>
+        const revealOnScroll = () => {
+            reveals.forEach(element => {
+                const elementTop = element.getBoundingClientRect().top;
+                const windowHeight = window.innerHeight;
 
-  <script>
-    document.querySelectorAll('form').forEach(form => {
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = form.querySelector('input[type="email"]').value;
-        const button = form.querySelector('button');
-        const isFirst = form.id === 'waitlist-form';
-        const successEl = document.getElementById(isFirst ? 'success-message' : 'success-message-2');
-        const errorEl = document.getElementById(isFirst ? 'error-message' : 'error-message-2');
+                if (elementTop < windowHeight - 100) {
+                    element.classList.add('active');
+                }
+            });
+        };
 
-        button.disabled = true;
-        button.textContent = 'Joining...';
-        errorEl.classList.remove('show');
+        window.addEventListener('scroll', revealOnScroll);
+        revealOnScroll(); // Initial check
 
-        try {
-          const res = await fetch('/api/waitlist', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-          });
-
-          const data = await res.json();
-
-          if (res.ok) {
-            form.classList.add('hidden');
-            successEl.classList.add('show');
-          } else {
-            throw new Error(data.error || 'Something went wrong');
-          }
-        } catch (err) {
-          errorEl.textContent = err.message;
-          errorEl.classList.add('show');
-          button.disabled = false;
-          button.textContent = 'Join Waitlist';
+        // Scroll to waitlist function
+        function scrollToWaitlist() {
+            document.querySelector('.cta-section').scrollIntoView({
+                behavior: 'smooth'
+            });
         }
-      });
-    });
-  </script>
+
+        // Form submission
+        document.getElementById('waitlist-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email-input').value;
+            const button = e.target.querySelector('button');
+            const successEl = document.getElementById('success-message');
+            const errorEl = document.getElementById('error-message');
+            const form = document.getElementById('waitlist-form');
+
+            button.disabled = true;
+            button.textContent = 'Joining...';
+            errorEl.classList.remove('show');
+            successEl.classList.remove('show');
+
+            try {
+                const res = await fetch('/api/waitlist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    form.style.display = 'none';
+                    successEl.classList.add('show');
+                } else {
+                    throw new Error(data.error || 'Something went wrong');
+                }
+            } catch (err) {
+                errorEl.textContent = err.message;
+                errorEl.classList.add('show');
+                button.disabled = false;
+                button.textContent = 'Join Waitlist';
+            }
+        });
+    </script>
 </body>
 </html>`;
 

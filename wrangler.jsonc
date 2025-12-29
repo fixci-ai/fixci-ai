@@ -2,11 +2,21 @@
   "name": "fixci-landing",
   "main": "apps/landing/src/index.js",
   "compatibility_date": "2024-01-01",
+  "routes": [
+    {
+      "pattern": "fixci.dev/*",
+      "zone_name": "fixci.dev"
+    },
+    {
+      "pattern": "www.fixci.dev/*",
+      "zone_name": "fixci.dev"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "fixci-db",
-      "database_id": "YOUR_DATABASE_ID"
+      "database_id": "285af42e-dfc5-4437-a7e4-9cfe65acea89"
     }
   ]
 }
