@@ -908,7 +908,7 @@
                 <div style="background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem;">
                     <p style="color: var(--text-muted); margin-bottom: 1rem;">${message}</p>
                     ${installations.map(inst => `
-                        <div onclick="fillInstallationId(${inst.installation_id})" style="
+                        <div onclick="fillInstallationId(${inst.installation_id}, '${inst.account_login}', ${inst.repository_count || 0})" style="
                             background: var(--bg-card);
                             border: 1px solid var(--border);
                             border-left: 3px solid var(--primary);
@@ -933,7 +933,12 @@
                                 <strong>Status:</strong> <span style="
                                     display: inline-block;
                                     padding: 0.15rem 0.5rem;
-                                    background: ${(inst.subscription_status || inst.status) === 'active' ? 'var(--primary)' : 'var(--danger)'};
+                                    background: ${(() => {
+                                        const status = inst.subscription_status || inst.status;
+                                        if (!status || status === 'active') return 'var(--primary)';
+                                        if (status === 'suspended' || status === 'cancelled') return 'var(--danger)';
+                                        return 'var(--warning)';
+                                    })()};
                                     border-radius: 4px;
                                     font-size: 0.8rem;
                                 ">${inst.subscription_status || inst.status || 'active'}</span>
@@ -950,19 +955,32 @@
             resultsDiv.innerHTML = html;
         }
 
-        function fillInstallationId(id) {
+        function fillInstallationId(id, accountLogin, repoCount) {
             // Fill all installation ID fields
             document.getElementById('grantInstallationId').value = id;
             document.getElementById('statusInstallationId').value = id;
             document.getElementById('resetInstallationId').value = id;
             document.getElementById('revokeInstallationId').value = id;
 
+            // Clear repository field and add note (since installations can have multiple repos)
+            const repoField = document.getElementById('grantRepository');
+            if (repoField) {
+                repoField.value = '';
+                repoField.placeholder = `Installation has ${repoCount || 0} repo(s) - leave empty or specify one`;
+            }
+
+            // Clear email field (not applicable for existing installations)
+            const emailField = document.getElementById('grantEmail');
+            if (emailField) {
+                emailField.value = '';
+            }
+
             // Show success message
             const msg = document.createElement('div');
             msg.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--primary); color: white; padding: 1rem 1.5rem; border-radius: 8px; z-index: 9999;';
-            msg.textContent = `Installation ID ${id} filled in all forms`;
+            msg.textContent = `${accountLogin} (ID: ${id}) filled in all forms`;
             document.body.appendChild(msg);
-            setTimeout(() => msg.remove(), 2000);
+            setTimeout(() => msg.remove(), 2500);
         }
 
         async function revokeAccess() {
