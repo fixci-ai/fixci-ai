@@ -427,6 +427,54 @@ export async function listWaitlist(request, env) {
   });
 }
 
+/**
+ * Search installations by account name or login
+ */
+export async function searchInstallations(request, env) {
+  const auth = verifyAdminAuth(request, env);
+  if (!auth.authorized) {
+    return jsonResponse({ error: auth.error }, 401);
+  }
+
+  const url = new URL(request.url);
+  const query = url.searchParams.get('q') || '';
+  const limit = parseInt(url.searchParams.get('limit') || '20');
+
+  if (!query || query.length < 2) {
+    return jsonResponse({
+      error: 'Search query too short. Minimum 2 characters required.'
+    }, 400);
+  }
+
+  // Search installations by account_login
+  const installations = await env.DB.prepare(`
+    SELECT
+      i.installation_id,
+      i.account_login,
+      i.account_type,
+      i.is_active,
+      i.created_at,
+      s.tier,
+      s.status as subscription_status,
+      s.analyses_used_current_period,
+      s.analyses_limit_monthly,
+      COUNT(DISTINCT r.id) as repository_count
+    FROM installations i
+    LEFT JOIN subscriptions s ON i.installation_id = s.installation_id
+    LEFT JOIN repositories r ON i.installation_id = r.installation_id
+    WHERE LOWER(i.account_login) LIKE LOWER(?)
+    GROUP BY i.installation_id
+    ORDER BY i.created_at DESC
+    LIMIT ?
+  `).bind(`%${query}%`, limit).all();
+
+  return jsonResponse({
+    query,
+    results: installations.results,
+    count: installations.results.length
+  });
+}
+
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
     status,
