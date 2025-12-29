@@ -438,6 +438,21 @@
 
                 <hr style="margin: 2rem 0; border: 1px solid var(--border); opacity: 0.3;">
 
+                <h2 style="margin-bottom: 1rem;">🔍 Search Installations</h2>
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Find installations by GitHub account name or organization</p>
+
+                <div class="input-group">
+                    <label>Account Name</label>
+                    <input type="text" id="searchQuery" placeholder="e.g., fixci-ai, acme-corp">
+                    <small style="color: var(--text-muted);">Search by GitHub username or organization name</small>
+                </div>
+
+                <button onclick="searchInstallations()" style="margin-bottom: 1rem;">Search</button>
+
+                <div id="searchResults" style="margin-bottom: 2rem;"></div>
+
+                <hr style="margin: 2rem 0; border: 1px solid var(--border); opacity: 0.3;">
+
                 <h2 style="margin-bottom: 1rem;">Grant Subscription Tier</h2>
                 <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Manually grant or change subscription tier for an installation</p>
 
@@ -500,7 +515,7 @@
                     <button onclick="updateStatus()">Update Status</button>
                 </div>
 
-                <div>
+                <div style="margin-bottom: 2rem;">
                     <h3 style="margin-bottom: 1rem;">Reset Usage</h3>
                     <p style="color: var(--text-muted); margin-bottom: 1rem;">Reset usage counters for current billing period</p>
                     <div class="input-group">
@@ -512,6 +527,27 @@
                         <input type="text" id="resetReason" placeholder="e.g., Service credit, Testing, etc.">
                     </div>
                     <button onclick="resetUsage()">Reset Usage</button>
+                </div>
+
+                <div>
+                    <h3 style="margin-bottom: 1rem; color: var(--danger);">🚫 Revoke/Downgrade Access</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 1rem;">Downgrade to free tier or suspend account</p>
+                    <div class="input-group">
+                        <label>Installation ID</label>
+                        <input type="number" id="revokeInstallationId" placeholder="12345">
+                    </div>
+                    <div class="input-group">
+                        <label>Action</label>
+                        <select id="revokeAction">
+                            <option value="downgrade">Downgrade to Free Tier</option>
+                            <option value="suspend">Suspend Account</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Reason</label>
+                        <input type="text" id="revokeReason" placeholder="e.g., Payment failed, ToS violation, etc.">
+                    </div>
+                    <button onclick="revokeAccess()" style="background: var(--danger);">Revoke Access</button>
                 </div>
             </div>
         </div>
@@ -752,6 +788,125 @@
                 alert(`Success: ${result.message}`);
                 document.getElementById('resetInstallationId').value = '';
                 document.getElementById('resetReason').value = '';
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function searchInstallations() {
+            const query = document.getElementById('searchQuery').value;
+
+            if (!query || query.length < 2) {
+                alert('Please enter at least 2 characters to search');
+                return;
+            }
+
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '<p style="color: var(--text-muted);">Searching...</p>';
+
+            try {
+                const data = await apiCall(`/admin/installations/search?q=${encodeURIComponent(query)}`);
+
+                if (!data.results || data.results.length === 0) {
+                    resultsDiv.innerHTML = '<p style="color: var(--text-muted);">No installations found</p>';
+                    return;
+                }
+
+                const html = `
+                    <div style="background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem;">
+                        <p style="color: var(--text-muted); margin-bottom: 1rem;">Found ${data.count} installation(s)</p>
+                        ${data.results.map(inst => `
+                            <div onclick="fillInstallationId(${inst.installation_id})" style="
+                                background: var(--bg-card);
+                                border: 1px solid var(--border);
+                                border-left: 3px solid var(--primary);
+                                border-radius: 6px;
+                                padding: 1rem;
+                                margin-bottom: 0.75rem;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                            " onmouseover="this.style.borderLeftColor='#059669'" onmouseout="this.style.borderLeftColor='var(--primary)'">
+                                <h4 style="color: var(--primary); margin-bottom: 0.5rem;">${inst.account_login}</h4>
+                                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+                                    <strong>Installation ID:</strong> ${inst.installation_id}
+                                </p>
+                                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+                                    <strong>Tier:</strong> <span style="
+                                        display: inline-block;
+                                        padding: 0.15rem 0.5rem;
+                                        background: ${inst.tier === 'pro' ? 'var(--primary)' : inst.tier === 'enterprise' ? '#8b5cf6' : 'var(--border)'};
+                                        border-radius: 4px;
+                                        font-size: 0.8rem;
+                                    ">${inst.tier || 'free'}</span>
+                                    <strong>Status:</strong> <span style="
+                                        display: inline-block;
+                                        padding: 0.15rem 0.5rem;
+                                        background: ${inst.subscription_status === 'active' ? 'var(--primary)' : 'var(--danger)'};
+                                        border-radius: 4px;
+                                        font-size: 0.8rem;
+                                    ">${inst.subscription_status || 'active'}</span>
+                                </p>
+                                <p style="font-size: 0.9rem; color: var(--text-muted);">
+                                    <strong>Usage:</strong> ${inst.analyses_used_current_period || 0}/${inst.analyses_limit_monthly || 0} analyses |
+                                    <strong>Repos:</strong> ${inst.repository_count || 0}
+                                </p>
+                                <p style="font-size: 0.85rem; color: var(--primary); margin-top: 0.5rem;">Click to auto-fill Installation ID ↓</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                resultsDiv.innerHTML = html;
+            } catch (err) {
+                resultsDiv.innerHTML = `<p style="color: var(--danger);">Error: ${err.message}</p>`;
+            }
+        }
+
+        function fillInstallationId(id) {
+            // Fill all installation ID fields
+            document.getElementById('grantInstallationId').value = id;
+            document.getElementById('statusInstallationId').value = id;
+            document.getElementById('resetInstallationId').value = id;
+            document.getElementById('revokeInstallationId').value = id;
+
+            // Show success message
+            const msg = document.createElement('div');
+            msg.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--primary); color: white; padding: 1rem 1.5rem; border-radius: 8px; z-index: 9999;';
+            msg.textContent = `Installation ID ${id} filled in all forms`;
+            document.body.appendChild(msg);
+            setTimeout(() => msg.remove(), 2000);
+        }
+
+        async function revokeAccess() {
+            const installationId = document.getElementById('revokeInstallationId').value;
+            const action = document.getElementById('revokeAction').value;
+            const reason = document.getElementById('revokeReason').value;
+
+            if (!installationId) {
+                alert('Please enter installation ID');
+                return;
+            }
+
+            const confirmMsg = action === 'downgrade'
+                ? `Are you sure you want to downgrade installation ${installationId} to free tier?`
+                : `Are you sure you want to suspend installation ${installationId}?`;
+
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+
+            try {
+                const result = await apiCall('/admin/subscriptions/revoke', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        installationId: parseInt(installationId),
+                        action,
+                        reason
+                    })
+                });
+
+                alert(`Success: ${result.message}`);
+                document.getElementById('revokeInstallationId').value = '';
+                document.getElementById('revokeReason').value = '';
             } catch (err) {
                 alert('Error: ' + err.message);
             }
