@@ -482,6 +482,78 @@ async function verifySignature(payload, signature, secret) {
   return signature === expectedSignature;
 }
 
+/**
+ * Extract logs from failed steps only, ignoring successful setup steps
+ * GitHub Actions logs use ##[group] markers to separate steps
+ */
+function extractFailedStepLogs(fullLogs, failedSteps) {
+  if (!failedSteps || failedSteps.length === 0) {
+    // No step info, fall back to last 3000 chars
+    return fullLogs.slice(-3000);
+  }
+
+  const failedStepNames = failedSteps.map(s => s.name);
+  const extractedLogs = [];
+
+  // GitHub Actions logs format: ##[group]Run step-name ... ##[endgroup]
+  // Split by groups and find matching failed steps
+  const groupPattern = /##\[group\]([^\n]+)\n([\s\S]*?)(?=##\[(?:endgroup|group)]|$)/g;
+  let match;
+
+  while ((match = groupPattern.exec(fullLogs)) !== null) {
+    const stepHeader = match[1];
+    const stepContent = match[2];
+
+    // Check if this group matches any failed step name
+    const isFailedStep = failedStepNames.some(name =>
+      stepHeader.includes(name) || stepHeader.includes(`Run ${name}`)
+    );
+
+    if (isFailedStep) {
+      extractedLogs.push(`### ${stepHeader}\n${stepContent.trim()}`);
+    }
+  }
+
+  if (extractedLogs.length > 0) {
+    const combined = extractedLogs.join('\n\n');
+    // Limit to 10k chars to stay within token limits but get more context than before
+    return combined.length > 10000 ? combined.slice(-10000) : combined;
+  }
+
+  // Fallback: if regex didn't match, look for error keywords in last 10k
+  const tailLogs = fullLogs.slice(-10000);
+  const errorLines = tailLogs.split('\n').filter(line =>
+    line.includes('error') ||
+    line.includes('Error') ||
+    line.includes('ERROR') ||
+    line.includes('failed') ||
+    line.includes('Failed') ||
+    line.includes('FAILED') ||
+    line.includes('##[error]')
+  );
+
+  if (errorLines.length > 0) {
+    // Get context around errors (50 lines before/after each error)
+    const contextSize = 50;
+    const lines = tailLogs.split('\n');
+    const relevantIndices = new Set();
+
+    errorLines.forEach(errorLine => {
+      const idx = lines.indexOf(errorLine);
+      if (idx !== -1) {
+        for (let i = Math.max(0, idx - contextSize); i < Math.min(lines.length, idx + contextSize); i++) {
+          relevantIndices.add(i);
+        }
+      }
+    });
+
+    const contextLogs = Array.from(relevantIndices).sort((a, b) => a - b).map(i => lines[i]).join('\n');
+    return contextLogs.length > 10000 ? contextLogs.slice(-10000) : contextLogs;
+  }
+
+  // Last resort: just take the last 10k
+  return fullLogs.slice(-10000);
+}
 
 async function processAnalysis(analysisId, workflowRun, repository, prNumber, installationId, env) {
   const startTime = Date.now();
@@ -523,9 +595,10 @@ async function processAnalysis(analysisId, workflowRun, repository, prNumber, in
         token
       );
 
-      // Extract the last 3000 characters (most recent errors) to stay within AI token limits
-      logsToAnalyze = fullLogs.slice(-3000);
-      console.log(`Analyzing ${logsToAnalyze.length} characters of actual logs`);
+      // Extract only the failed step's logs
+      const failedSteps = failedJob.steps.filter(step => step.conclusion === 'failure');
+      logsToAnalyze = extractFailedStepLogs(fullLogs, failedSteps);
+      console.log(`Analyzing ${logsToAnalyze.length} characters from failed step(s)`);
     } catch (logError) {
       console.warn(`Failed to fetch logs (${logError.message}), using step info instead`);
 
