@@ -441,13 +441,35 @@
                 <h2 style="margin-bottom: 1rem;">🔍 Search Installations</h2>
                 <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Find installations by GitHub account name or organization</p>
 
-                <div class="input-group">
-                    <label>Account Name</label>
-                    <input type="text" id="searchQuery" placeholder="e.g., fixci-ai, acme-corp">
-                    <small style="color: var(--text-muted);">Search by GitHub username or organization name</small>
+                <div class="filters" style="margin-bottom: 1rem;">
+                    <div>
+                        <label>Search by Name</label>
+                        <input type="text" id="searchQuery" placeholder="e.g., fixci-ai, acme-corp" onkeyup="if(event.key==='Enter') searchInstallations()">
+                    </div>
+                    <div>
+                        <label>Filter by Tier</label>
+                        <select id="searchFilterTier" onchange="searchInstallations()">
+                            <option value="">All Tiers</option>
+                            <option value="free">Free</option>
+                            <option value="pro">Pro</option>
+                            <option value="enterprise">Enterprise</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Filter by Status</label>
+                        <select id="searchFilterStatus" onchange="searchInstallations()">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="suspended">Suspended</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
                 </div>
 
-                <button onclick="searchInstallations()" style="margin-bottom: 1rem;">Search</button>
+                <div class="button-group" style="margin-bottom: 1rem;">
+                    <button onclick="searchInstallations()">Search</button>
+                    <button onclick="loadAllInstallations()" style="background: var(--bg-card); color: var(--text);">Show All</button>
+                </div>
 
                 <div id="searchResults" style="margin-bottom: 2rem;"></div>
 
@@ -793,11 +815,50 @@
             }
         }
 
+        async function loadAllInstallations() {
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '<p style="color: var(--text-muted);">Loading all installations...</p>';
+
+            try {
+                const data = await apiCall('/admin/subscriptions?limit=1000');
+
+                if (!data.subscriptions || data.subscriptions.length === 0) {
+                    resultsDiv.innerHTML = '<p style="color: var(--text-muted);">No installations found</p>';
+                    return;
+                }
+
+                // Apply filters
+                let filtered = data.subscriptions;
+                const tierFilter = document.getElementById('searchFilterTier').value;
+                const statusFilter = document.getElementById('searchFilterStatus').value;
+                const queryFilter = document.getElementById('searchQuery').value.toLowerCase();
+
+                if (tierFilter) {
+                    filtered = filtered.filter(inst => inst.tier === tierFilter);
+                }
+                if (statusFilter) {
+                    filtered = filtered.filter(inst => inst.status === statusFilter);
+                }
+                if (queryFilter) {
+                    filtered = filtered.filter(inst =>
+                        inst.account_login.toLowerCase().includes(queryFilter)
+                    );
+                }
+
+                displayInstallations(filtered, `Showing ${filtered.length} of ${data.subscriptions.length} installation(s)`);
+            } catch (err) {
+                resultsDiv.innerHTML = `<p style="color: var(--danger);">Error: ${err.message}</p>`;
+            }
+        }
+
         async function searchInstallations() {
             const query = document.getElementById('searchQuery').value;
+            const tierFilter = document.getElementById('searchFilterTier').value;
+            const statusFilter = document.getElementById('searchFilterStatus').value;
 
-            if (!query || query.length < 2) {
-                alert('Please enter at least 2 characters to search');
+            // If no query and no filters, load all
+            if ((!query || query.length < 2) && !tierFilter && !statusFilter) {
+                loadAllInstallations();
                 return;
             }
 
@@ -805,60 +866,88 @@
             resultsDiv.innerHTML = '<p style="color: var(--text-muted);">Searching...</p>';
 
             try {
-                const data = await apiCall(`/admin/installations/search?q=${encodeURIComponent(query)}`);
+                let url = '/admin/installations/search?';
+                const params = [];
+
+                if (query && query.length >= 2) {
+                    params.push(`q=${encodeURIComponent(query)}`);
+                }
+                params.push('limit=100');
+
+                const data = await apiCall(url + params.join('&'));
 
                 if (!data.results || data.results.length === 0) {
                     resultsDiv.innerHTML = '<p style="color: var(--text-muted);">No installations found</p>';
                     return;
                 }
 
-                const html = `
-                    <div style="background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem;">
-                        <p style="color: var(--text-muted); margin-bottom: 1rem;">Found ${data.count} installation(s)</p>
-                        ${data.results.map(inst => `
-                            <div onclick="fillInstallationId(${inst.installation_id})" style="
-                                background: var(--bg-card);
-                                border: 1px solid var(--border);
-                                border-left: 3px solid var(--primary);
-                                border-radius: 6px;
-                                padding: 1rem;
-                                margin-bottom: 0.75rem;
-                                cursor: pointer;
-                                transition: all 0.2s;
-                            " onmouseover="this.style.borderLeftColor='#059669'" onmouseout="this.style.borderLeftColor='var(--primary)'">
-                                <h4 style="color: var(--primary); margin-bottom: 0.5rem;">${inst.account_login}</h4>
-                                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem;">
-                                    <strong>Installation ID:</strong> ${inst.installation_id}
-                                </p>
-                                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem;">
-                                    <strong>Tier:</strong> <span style="
-                                        display: inline-block;
-                                        padding: 0.15rem 0.5rem;
-                                        background: ${inst.tier === 'pro' ? 'var(--primary)' : inst.tier === 'enterprise' ? '#8b5cf6' : 'var(--border)'};
-                                        border-radius: 4px;
-                                        font-size: 0.8rem;
-                                    ">${inst.tier || 'free'}</span>
-                                    <strong>Status:</strong> <span style="
-                                        display: inline-block;
-                                        padding: 0.15rem 0.5rem;
-                                        background: ${inst.subscription_status === 'active' ? 'var(--primary)' : 'var(--danger)'};
-                                        border-radius: 4px;
-                                        font-size: 0.8rem;
-                                    ">${inst.subscription_status || 'active'}</span>
-                                </p>
-                                <p style="font-size: 0.9rem; color: var(--text-muted);">
-                                    <strong>Usage:</strong> ${inst.analyses_used_current_period || 0}/${inst.analyses_limit_monthly || 0} analyses |
-                                    <strong>Repos:</strong> ${inst.repository_count || 0}
-                                </p>
-                                <p style="font-size: 0.85rem; color: var(--primary); margin-top: 0.5rem;">Click to auto-fill Installation ID ↓</p>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-                resultsDiv.innerHTML = html;
+                // Apply filters
+                let filtered = data.results;
+                if (tierFilter) {
+                    filtered = filtered.filter(inst => inst.tier === tierFilter);
+                }
+                if (statusFilter) {
+                    filtered = filtered.filter(inst => inst.subscription_status === statusFilter);
+                }
+
+                displayInstallations(filtered, `Found ${filtered.length} installation(s)`);
             } catch (err) {
                 resultsDiv.innerHTML = `<p style="color: var(--danger);">Error: ${err.message}</p>`;
             }
+        }
+
+        function displayInstallations(installations, message) {
+            const resultsDiv = document.getElementById('searchResults');
+
+            if (!installations || installations.length === 0) {
+                resultsDiv.innerHTML = '<p style="color: var(--text-muted);">No installations match the filters</p>';
+                return;
+            }
+
+            const html = `
+                <div style="background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem;">
+                    <p style="color: var(--text-muted); margin-bottom: 1rem;">${message}</p>
+                    ${installations.map(inst => `
+                        <div onclick="fillInstallationId(${inst.installation_id})" style="
+                            background: var(--bg-card);
+                            border: 1px solid var(--border);
+                            border-left: 3px solid var(--primary);
+                            border-radius: 6px;
+                            padding: 1rem;
+                            margin-bottom: 0.75rem;
+                            cursor: pointer;
+                            transition: all 0.2s;
+                        " onmouseover="this.style.borderLeftColor='#059669'" onmouseout="this.style.borderLeftColor='var(--primary)'">
+                            <h4 style="color: var(--primary); margin-bottom: 0.5rem;">${inst.account_login}</h4>
+                            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+                                <strong>Installation ID:</strong> ${inst.installation_id}
+                            </p>
+                            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+                                <strong>Tier:</strong> <span style="
+                                    display: inline-block;
+                                    padding: 0.15rem 0.5rem;
+                                    background: ${inst.tier === 'pro' ? 'var(--primary)' : inst.tier === 'enterprise' ? '#8b5cf6' : 'var(--border)'};
+                                    border-radius: 4px;
+                                    font-size: 0.8rem;
+                                ">${inst.tier || 'free'}</span>
+                                <strong>Status:</strong> <span style="
+                                    display: inline-block;
+                                    padding: 0.15rem 0.5rem;
+                                    background: ${(inst.subscription_status || inst.status) === 'active' ? 'var(--primary)' : 'var(--danger)'};
+                                    border-radius: 4px;
+                                    font-size: 0.8rem;
+                                ">${inst.subscription_status || inst.status || 'active'}</span>
+                            </p>
+                            <p style="font-size: 0.9rem; color: var(--text-muted);">
+                                <strong>Usage:</strong> ${inst.analyses_used_current_period || 0}/${inst.analyses_limit_monthly || 0} analyses |
+                                <strong>Repos:</strong> ${inst.repository_count || 0}
+                            </p>
+                            <p style="font-size: 0.85rem; color: var(--primary); margin-top: 0.5rem;">Click to auto-fill Installation ID ↓</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            resultsDiv.innerHTML = html;
         }
 
         function fillInstallationId(id) {
@@ -984,6 +1073,7 @@
             // Load data for the tab
             if (tab === 'grant') {
                 fetchWaitlist();
+                loadAllInstallations();
             }
         }
 
