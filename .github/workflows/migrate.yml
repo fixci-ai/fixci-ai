@@ -1,0 +1,67 @@
+name: Database Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      migration_file:
+        description: 'Migration file name (e.g., 001-add-subscriptions.sql)'
+        required: true
+        type: string
+      confirm:
+        description: 'Type "MIGRATE" to confirm'
+        required: true
+        type: string
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    name: Run Database Migration
+    environment: production
+
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "MIGRATE" ]; then
+            echo "❌ Migration cancelled: confirmation not provided"
+            echo "You must type 'MIGRATE' to confirm"
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      - name: Verify migration file exists
+        run: |
+          if [ ! -f "migrations/${{ inputs.migration_file }}" ]; then
+            echo "❌ Migration file not found: migrations/${{ inputs.migration_file }}"
+            exit 1
+          fi
+          echo "✓ Migration file found"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Migration SQL:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          cat migrations/${{ inputs.migration_file }}
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Run migration
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "Running migration: ${{ inputs.migration_file }}"
+          wrangler d1 execute fixci-db --remote --file=migrations/${{ inputs.migration_file }}
+
+      - name: Migration complete
+        if: success()
+        run: |
+          echo "✅ Migration completed successfully"
+          echo "📝 Applied: ${{ inputs.migration_file }}"

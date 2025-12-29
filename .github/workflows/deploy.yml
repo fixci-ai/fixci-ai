@@ -1,0 +1,106 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  deploy-landing:
+    runs-on: ubuntu-latest
+    name: Deploy Landing Page
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: '.'
+          command: deploy --config wrangler.jsonc
+
+      - name: Deployment notification
+        if: success()
+        run: |
+          echo "✅ Landing page deployed successfully"
+          echo "🌐 Live at: https://fixci.dev"
+
+  deploy-github-app:
+    runs-on: ubuntu-latest
+    name: Deploy GitHub App Worker
+    environment: production
+    needs: deploy-landing # Deploy landing first
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Deploy GitHub App Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: 'packages/github-app'
+          command: deploy --config wrangler.toml
+
+      - name: Deployment notification
+        if: success()
+        run: |
+          echo "✅ GitHub App Worker deployed successfully"
+          echo "🔗 Live at: https://fixci-github-app.adam-vegh.workers.dev"
+
+  health-check:
+    runs-on: ubuntu-latest
+    name: Production Health Check
+    needs: [deploy-landing, deploy-github-app]
+
+    steps:
+      - name: Check Landing Page
+        run: |
+          echo "Checking landing page health..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://fixci.dev)
+          if [ $STATUS -eq 200 ]; then
+            echo "✅ Landing page is healthy (HTTP $STATUS)"
+          else
+            echo "❌ Landing page returned HTTP $STATUS"
+            exit 1
+          fi
+
+      - name: Check GitHub App Worker
+        run: |
+          echo "Checking GitHub App Worker health..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://fixci-github-app.adam-vegh.workers.dev/health)
+          if [ $STATUS -eq 200 ]; then
+            echo "✅ GitHub App Worker is healthy (HTTP $STATUS)"
+          else
+            echo "❌ GitHub App Worker returned HTTP $STATUS"
+            exit 1
+          fi
+
+      - name: Deployment Summary
+        if: success()
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🎉 DEPLOYMENT SUCCESSFUL"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "📦 Deployed Services:"
+          echo "  • Landing Page: https://fixci.dev"
+          echo "  • GitHub App: https://fixci-github-app.adam-vegh.workers.dev"
+          echo ""
+          echo "✅ All health checks passed"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
