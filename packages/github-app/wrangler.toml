@@ -13,6 +13,11 @@ database_id = "285af42e-dfc5-4437-a7e4-9cfe65acea89"
 [ai]
 binding = "AI"
 
+# KV Namespace for session storage
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "2e8fae5e5a774cd0b5059234e7876df0"
+
 # Environment variables (set via wrangler secret)
 # GitHub App credentials
 # - GITHUB_APP_ID

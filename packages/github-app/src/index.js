@@ -2,7 +2,8 @@ import { analyzeFailure } from './analyzer.js';
 import { getInstallationToken, getWorkflowJobs, getJobLogs, postPRComment, formatPRComment } from './github.js';
 import { canAnalyze, recordUsage, getSubscription, getTierConfig } from './subscription.js';
 import { handleStripeWebhook, createCheckoutSession, createPortalSession } from './stripe.js';
-import { listSubscriptions, grantSubscription, updateSubscriptionStatus, getSubscriptionDetails, resetUsage, getStats, listWaitlist, searchInstallations, revokeSubscription } from './admin.js';
+import { listSubscriptions, grantSubscription, updateSubscriptionStatus, getSubscriptionDetails, resetUsage, getStats, listWaitlist, searchInstallations, revokeSubscription, getInstallationMembers } from './admin.js';
+import { sendLoginLink, verifyToken, verifySession, logout } from './auth.js';
 
 /**
  * FixCI GitHub App - Webhook Handler
@@ -202,12 +203,28 @@ export default {
       return searchInstallations(request, env);
     }
 
+    // Admin API: Get installation members
+    if (url.pathname.startsWith('/admin/installations/') && url.pathname.endsWith('/members') && request.method === 'GET') {
+      const installationId = url.pathname.split('/')[3];
+      return getInstallationMembers(request, env, installationId);
+    }
+
     // API: Complete setup - save contact info after installation
     if (url.pathname === '/api/complete-setup' && request.method === 'POST') {
       const { installationId, email, company } = await request.json();
 
       if (!installationId || !email) {
         return jsonResponse({ error: 'Missing installationId or email' }, 400);
+      }
+
+      // Find or create user
+      let user = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
+
+      if (!user) {
+        const result = await env.DB.prepare(
+          'INSERT INTO users (email) VALUES (?) RETURNING *'
+        ).bind(email).first();
+        user = result;
       }
 
       // Update installation with contact info
@@ -217,9 +234,99 @@ export default {
         WHERE installation_id = ?
       `).bind(email, company || null, installationId).run();
 
+      // Create installation_member relationship with 'owner' role
+      await env.DB.prepare(`
+        INSERT OR IGNORE INTO installation_members (user_id, installation_id, role)
+        VALUES (?, ?, 'owner')
+      `).bind(user.id, installationId).run();
+
       return jsonResponse({
         success: true,
-        message: 'Contact information saved successfully'
+        message: 'Contact information saved successfully',
+        userId: user.id
+      });
+    }
+
+    // Auth: Send magic link login email
+    if (url.pathname === '/auth/login' && request.method === 'POST') {
+      const { email } = await request.json();
+
+      if (!email || !email.includes('@')) {
+        return jsonResponse({ error: 'Valid email required' }, 400);
+      }
+
+      try {
+        const result = await sendLoginLink(email, env);
+        return jsonResponse(result);
+      } catch (err) {
+        console.error('Login error:', err);
+        return jsonResponse({ error: 'Failed to send login link' }, 500);
+      }
+    }
+
+    // Auth: Verify magic link token
+    if (url.pathname === '/auth/verify' && request.method === 'GET') {
+      const token = url.searchParams.get('token');
+
+      if (!token) {
+        return jsonResponse({ error: 'Token required' }, 400);
+      }
+
+      const result = await verifyToken(token, env);
+
+      if (!result.valid) {
+        return jsonResponse({ error: result.error }, 401);
+      }
+
+      // Return session token + user info
+      return jsonResponse({
+        success: true,
+        sessionToken: result.sessionToken,
+        user: result.user
+      });
+    }
+
+    // Auth: Logout
+    if (url.pathname === '/auth/logout' && request.method === 'POST') {
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        await logout(token, env);
+      }
+      return jsonResponse({ success: true });
+    }
+
+    // API: Get current user info and installations
+    if (url.pathname === '/api/me' && request.method === 'GET') {
+      const auth = await verifySession(request, env);
+
+      if (!auth.authenticated) {
+        return jsonResponse({ error: auth.error }, 401);
+      }
+
+      // Get user's installations with subscription info
+      const installations = await env.DB.prepare(`
+        SELECT
+          i.*,
+          im.role,
+          s.tier,
+          s.status as subscription_status,
+          s.analyses_used_current_period,
+          s.analyses_limit_monthly,
+          COUNT(DISTINCT r.id) as repository_count,
+          GROUP_CONCAT(DISTINCT r.full_name) as repositories
+        FROM installation_members im
+        JOIN installations i ON im.installation_id = i.installation_id
+        LEFT JOIN subscriptions s ON i.installation_id = s.installation_id
+        LEFT JOIN repositories r ON i.installation_id = r.installation_id
+        WHERE im.user_id = ?
+        GROUP BY i.installation_id
+        ORDER BY im.created_at DESC
+      `).bind(auth.user.id).all();
+
+      return jsonResponse({
+        user: auth.user,
+        installations: installations.results
       });
     }
 

@@ -581,6 +581,39 @@ export async function searchInstallations(request, env) {
   });
 }
 
+/**
+ * Get all members for a specific installation
+ */
+export async function getInstallationMembers(request, env, installationId) {
+  const auth = verifyAdminAuth(request, env);
+  if (!auth.authorized) {
+    return jsonResponse({ error: auth.error }, 401);
+  }
+
+  if (!installationId) {
+    return jsonResponse({ error: 'Missing installationId' }, 400);
+  }
+
+  const members = await env.DB.prepare(`
+    SELECT
+      im.user_id,
+      im.role,
+      im.created_at,
+      u.email,
+      u.name
+    FROM installation_members im
+    JOIN users u ON im.user_id = u.id
+    WHERE im.installation_id = ?
+    ORDER BY im.created_at ASC
+  `).bind(parseInt(installationId)).all();
+
+  return jsonResponse({
+    installationId: parseInt(installationId),
+    members: members.results,
+    count: members.results.length
+  });
+}
+
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
     status,
