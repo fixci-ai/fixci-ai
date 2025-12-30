@@ -206,18 +206,19 @@
                 </svg>
             </div>
 
-            <h2>All Set!</h2>
-            <p class="subtitle">Your FixCI installation is ready to use</p>
+            <h2>Check Your Email!</h2>
+            <p class="subtitle">We've sent you a magic link to access your dashboard</p>
 
-            <div class="message success">
-                Your email has been saved. We'll notify you when FixCI analyzes your first failed workflow.
+            <div class="message success" id="success-message">
+                Check your email for a login link to access your dashboard
             </div>
 
             <div class="note">
                 <strong>Next steps:</strong><br>
-                1. Push some code or create a pull request<br>
-                2. If a workflow fails, FixCI will automatically analyze it<br>
-                3. Check your PR for AI-powered failure explanations
+                1. Check your email inbox for the magic link<br>
+                2. Click the link to access your FixCI dashboard<br>
+                3. View your installations and usage statistics<br>
+                4. Push code and let FixCI analyze any failed workflows
             </div>
 
             <button onclick="window.close()">Close Window</button>
@@ -264,6 +265,9 @@
                 if (!response.ok) {
                     throw new Error(data.error || 'Failed to save information');
                 }
+
+                // Update success message
+                document.getElementById('success-message').textContent = data.message;
 
                 // Show success view
                 document.getElementById('form-container').style.display = 'none';

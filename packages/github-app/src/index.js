@@ -2,13 +2,48 @@ import { analyzeFailure } from './analyzer.js';
 import { getInstallationToken, getWorkflowJobs, getJobLogs, postPRComment, formatPRComment } from './github.js';
 import { canAnalyze, recordUsage, getSubscription, getTierConfig } from './subscription.js';
 import { handleStripeWebhook, createCheckoutSession, createPortalSession } from './stripe.js';
-import { listSubscriptions, grantSubscription, updateSubscriptionStatus, getSubscriptionDetails, resetUsage, getStats, listWaitlist, searchInstallations, revokeSubscription, getInstallationMembers } from './admin.js';
+import { listSubscriptions, grantSubscription, updateSubscriptionStatus, getSubscriptionDetails, resetUsage, getStats, listWaitlist, searchInstallations, revokeSubscription, getInstallationMembers, listInstallations } from './admin.js';
 import { sendLoginLink, verifyToken, verifySession, logout } from './auth.js';
+import { checkRateLimit, getClientIP, rateLimitResponse } from './ratelimit.js';
 
 /**
  * FixCI GitHub App - Webhook Handler
  * Receives workflow_run.completed events from GitHub
  */
+
+/**
+ * SECURITY: Allowed origins for CORS
+ * Only these domains can make authenticated requests to the API
+ */
+const ALLOWED_ORIGINS = [
+  'https://fixci.dev',
+  'https://www.fixci.dev',
+  'https://dashboard.fixci.dev',
+  'http://localhost:8080',  // Local development
+  'http://127.0.0.1:8080'   // Local development
+];
+
+/**
+ * Get CORS headers with origin validation
+ * @param {Request} request - The incoming request
+ * @returns {Object} CORS headers with validated origin
+ */
+function getCorsHeaders(request) {
+  const origin = request.headers.get('Origin');
+
+  // Check if origin is in allowed list
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0]; // Default to main domain
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Credentials': 'true', // Required for httpOnly cookies
+    'Access-Control-Max-Age': '86400',
+  };
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -17,12 +52,7 @@ export default {
     // Handle CORS preflight requests
     if (request.method === 'OPTIONS') {
       return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          'Access-Control-Max-Age': '86400',
-        }
+        headers: getCorsHeaders(request)
       });
     }
 
@@ -30,9 +60,7 @@ export default {
     if (url.pathname === '/health') {
       return new Response('OK', {
         status: 200,
-        headers: {
-          'Access-Control-Allow-Origin': '*'
-        }
+        headers: getCorsHeaders(request)
       });
     }
 
@@ -198,6 +226,11 @@ export default {
       return listWaitlist(request, env);
     }
 
+    // Admin API: List all installations
+    if (url.pathname === '/admin/installations' && request.method === 'GET') {
+      return listInstallations(request, env);
+    }
+
     // Admin API: Search installations by name/organization
     if (url.pathname === '/admin/installations/search' && request.method === 'GET') {
       return searchInstallations(request, env);
@@ -209,7 +242,7 @@ export default {
       return getInstallationMembers(request, env, installationId);
     }
 
-    // API: Complete setup - save contact info after installation
+    // API: Complete setup - send magic link after installation
     if (url.pathname === '/api/complete-setup' && request.method === 'POST') {
       const { installationId, email, company } = await request.json();
 
@@ -217,83 +250,164 @@ export default {
         return jsonResponse({ error: 'Missing installationId or email' }, 400);
       }
 
-      // Find or create user
-      let user = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
-
-      if (!user) {
-        const result = await env.DB.prepare(
-          'INSERT INTO users (email) VALUES (?) RETURNING *'
-        ).bind(email).first();
-        user = result;
-      }
-
-      // Update installation with contact info
+      // Update installation with contact info immediately
       await env.DB.prepare(`
         UPDATE installations
         SET contact_email = ?, company_name = ?
         WHERE installation_id = ?
       `).bind(email, company || null, installationId).run();
 
-      // Create installation_member relationship with 'owner' role
-      await env.DB.prepare(`
-        INSERT OR IGNORE INTO installation_members (user_id, installation_id, role)
-        VALUES (?, ?, 'owner')
-      `).bind(user.id, installationId).run();
+      // Send magic link with installation metadata
+      // User account and installation_member relationship will be created
+      // when they verify the email (in auth.js verifyToken)
+      try {
+        await sendLoginLink(email, env, {
+          installationId: installationId.toString(),
+          company: company || null
+        });
 
-      return jsonResponse({
-        success: true,
-        message: 'Contact information saved successfully',
-        userId: user.id
-      });
+        return jsonResponse({
+          success: true,
+          message: 'Check your email for a login link to access your dashboard'
+        });
+      } catch (error) {
+        console.error('Failed to send magic link:', error);
+        return jsonResponse({
+          error: 'Failed to send login link. Please try again.'
+        }, 500);
+      }
     }
 
     // Auth: Send magic link login email
     if (url.pathname === '/auth/login' && request.method === 'POST') {
-      const { email } = await request.json();
+      const { email, installationId, company } = await request.json();
 
       if (!email || !email.includes('@')) {
         return jsonResponse({ error: 'Valid email required' }, 400);
       }
 
+      // SECURITY: Rate limit login attempts (3 per 15 minutes per email)
+      const rateLimit = await checkRateLimit(`login:${email}`, 3, 900, env);
+      if (!rateLimit.allowed) {
+        return rateLimitResponse(rateLimit.resetAt);
+      }
+
       try {
-        const result = await sendLoginLink(email, env);
+        // Pass installation metadata if provided (from setup flow)
+        const metadata = {};
+        if (installationId) metadata.installationId = installationId;
+        if (company) metadata.company = company;
+
+        const result = await sendLoginLink(email, env, metadata);
         return jsonResponse(result);
       } catch (err) {
         console.error('Login error:', err);
-        return jsonResponse({ error: 'Failed to send login link' }, 500);
+        return jsonResponse({
+          error: 'Failed to send login link',
+          details: err.message,
+          stack: err.stack
+        }, 500);
       }
     }
 
-    // Auth: Verify magic link token
+    // Auth: Verify magic link token (GET for email compatibility)
     if (url.pathname === '/auth/verify' && request.method === 'GET') {
       const token = url.searchParams.get('token');
 
       if (!token) {
-        return jsonResponse({ error: 'Token required' }, 400);
+        return jsonResponse({ error: 'Token required' }, 400, request);
+      }
+
+      // SECURITY: Rate limit verification attempts (10 per 15 minutes per IP)
+      const clientIP = getClientIP(request);
+      const rateLimit = await checkRateLimit(`verify:${clientIP}`, 10, 900, env);
+      if (!rateLimit.allowed) {
+        return rateLimitResponse(rateLimit.resetAt);
       }
 
       const result = await verifyToken(token, env);
 
       if (!result.valid) {
-        return jsonResponse({ error: result.error }, 401);
+        return jsonResponse({ error: result.error }, 401, request);
       }
 
-      // Return session token + user info
-      return jsonResponse({
+      // SECURITY: Set session in httpOnly cookie (not accessible to JavaScript)
+      const cookieValue = `session=${result.sessionToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=2592000`; // 30 days
+
+      const response = jsonResponse({
         success: true,
-        sessionToken: result.sessionToken,
         user: result.user
-      });
+        // sessionToken removed - now in httpOnly cookie
+      }, 200, request);
+
+      response.headers.set('Set-Cookie', cookieValue);
+
+      return response;
+    }
+
+    // Auth: Verify magic link token (POST - more secure alternative)
+    if (url.pathname === '/auth/verify' && request.method === 'POST') {
+      const body = await request.json();
+      const token = body.token;
+
+      if (!token) {
+        return jsonResponse({ error: 'Token required' }, 400, request);
+      }
+
+      // SECURITY: Rate limit verification attempts (10 per 15 minutes per IP)
+      const clientIP = getClientIP(request);
+      const rateLimit = await checkRateLimit(`verify:${clientIP}`, 10, 900, env);
+      if (!rateLimit.allowed) {
+        return rateLimitResponse(rateLimit.resetAt);
+      }
+
+      const result = await verifyToken(token, env);
+
+      if (!result.valid) {
+        return jsonResponse({ error: result.error }, 401, request);
+      }
+
+      // SECURITY: Set session in httpOnly cookie
+      const cookieValue = `session=${result.sessionToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=2592000`; // 30 days
+
+      const response = jsonResponse({
+        success: true,
+        user: result.user
+      }, 200, request);
+
+      response.headers.set('Set-Cookie', cookieValue);
+
+      return response;
     }
 
     // Auth: Logout
     if (url.pathname === '/auth/logout' && request.method === 'POST') {
-      const authHeader = request.headers.get('Authorization');
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        const token = authHeader.substring(7);
+      // Get token from cookie or Authorization header
+      let token = null;
+
+      const cookie = request.headers.get('Cookie');
+      if (cookie) {
+        const match = cookie.match(/session=([^;]+)/);
+        if (match) token = match[1];
+      }
+
+      // Fallback to Authorization header for backward compatibility
+      if (!token) {
+        const authHeader = request.headers.get('Authorization');
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          token = authHeader.substring(7);
+        }
+      }
+
+      if (token) {
         await logout(token, env);
       }
-      return jsonResponse({ success: true });
+
+      // Clear cookie
+      const response = jsonResponse({ success: true }, 200, request);
+      response.headers.set('Set-Cookie', 'session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0');
+
+      return response;
     }
 
     // API: Get current user info and installations
@@ -379,13 +493,16 @@ async function handleWebhook(request, env, ctx) {
 
     const payload = await request.text();
 
-    // Verify signature
-    if (env.GITHUB_WEBHOOK_SECRET) {
-      const isValid = await verifySignature(payload, signature, env.GITHUB_WEBHOOK_SECRET);
-      if (!isValid) {
-        console.error('Invalid webhook signature');
-        return new Response('Invalid signature', { status: 401 });
-      }
+    // SECURITY: Verify GitHub webhook signature (MANDATORY)
+    if (!env.GITHUB_WEBHOOK_SECRET) {
+      console.error('GITHUB_WEBHOOK_SECRET not configured');
+      return new Response('Webhook secret not configured', { status: 500 });
+    }
+
+    const isValid = await verifySignature(payload, signature, env.GITHUB_WEBHOOK_SECRET);
+    if (!isValid) {
+      console.error('Invalid webhook signature');
+      return new Response('Invalid signature', { status: 401 });
     }
 
     const data = JSON.parse(payload);
@@ -843,14 +960,19 @@ async function processAnalysis(analysisId, workflowRun, repository, prNumber, in
   }
 }
 
-function jsonResponse(data, status = 200) {
+function jsonResponse(data, status = 200, request = null) {
+  const corsHeaders = request ? getCorsHeaders(request) : {
+    // Fallback for backward compatibility - default to main domain only
+    'Access-Control-Allow-Origin': 'https://fixci.dev',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      ...corsHeaders,
     },
   });
 }
