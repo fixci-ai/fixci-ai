@@ -52,9 +52,14 @@ export async function listSubscriptions(request, env) {
       s.*,
       i.account_login,
       i.account_type,
-      i.is_active as installation_active
+      i.is_active as installation_active,
+      w.email as waitlist_email,
+      COUNT(DISTINCT r.id) as repository_count,
+      GROUP_CONCAT(DISTINCT r.full_name) as repositories
     FROM subscriptions s
     JOIN installations i ON s.installation_id = i.installation_id
+    LEFT JOIN repositories r ON s.installation_id = r.installation_id
+    LEFT JOIN waitlist w ON LOWER(i.account_login) = LOWER(SUBSTR(w.email, 1, INSTR(w.email, '@') - 1))
     WHERE 1=1
   `;
   const bindings = [];
@@ -69,7 +74,7 @@ export async function listSubscriptions(request, env) {
     bindings.push(status);
   }
 
-  query += ' ORDER BY s.created_at DESC LIMIT ? OFFSET ?';
+  query += ' GROUP BY s.installation_id ORDER BY s.created_at DESC LIMIT ? OFFSET ?';
   bindings.push(limit, offset);
 
   const result = await env.DB.prepare(query).bind(...bindings).all();
@@ -540,7 +545,7 @@ export async function searchInstallations(request, env) {
     }, 400);
   }
 
-  // Search installations by account_login
+  // Search installations by account_login with email from waitlist and repository names
   const installations = await env.DB.prepare(`
     SELECT
       i.installation_id,
@@ -552,10 +557,13 @@ export async function searchInstallations(request, env) {
       s.status as subscription_status,
       s.analyses_used_current_period,
       s.analyses_limit_monthly,
-      COUNT(DISTINCT r.id) as repository_count
+      COUNT(DISTINCT r.id) as repository_count,
+      GROUP_CONCAT(DISTINCT r.full_name) as repositories,
+      w.email as waitlist_email
     FROM installations i
     LEFT JOIN subscriptions s ON i.installation_id = s.installation_id
     LEFT JOIN repositories r ON i.installation_id = r.installation_id
+    LEFT JOIN waitlist w ON LOWER(i.account_login) = LOWER(SUBSTR(w.email, 1, INSTR(w.email, '@') - 1))
     WHERE LOWER(i.account_login) LIKE LOWER(?)
     GROUP BY i.installation_id
     ORDER BY i.created_at DESC
