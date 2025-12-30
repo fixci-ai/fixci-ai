@@ -1663,7 +1663,7 @@ const completeSetupHTML = `
                 document.getElementById('success-container').style.display = 'block';
 
             } catch (error) {
-                messageContainer.innerHTML = `<div class="message error">${error.message}</div>`;
+                messageContainer.innerHTML = '<div class="message error">' + error.message + '</div>';
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Complete Setup';
             }
