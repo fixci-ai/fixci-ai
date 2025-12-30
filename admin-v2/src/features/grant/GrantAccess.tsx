@@ -25,7 +25,8 @@ export function GrantAccess({ initialData }: GrantAccessProps) {
     React.useEffect(() => {
         if (initialData) {
             setInstallationId(initialData.installation_id?.toString() || '');
-            setEmail(initialData.waitlist_email || ''); // Use real email from waitlist
+            // Prefer contact_email (from post-install), fallback to waitlist_email
+            setEmail(initialData.contact_email || initialData.waitlist_email || '');
             setTier(initialData.tier || 'pro');
 
             // Auto-fill repository from repositories list (first repo if multiple)

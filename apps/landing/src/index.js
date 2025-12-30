@@ -30,6 +30,11 @@ export default {
       return serveInstalledPage(url);
     }
 
+    // Complete setup page (collect email after installation)
+    if (url.pathname === '/complete-setup') {
+      return serveCompleteSetupPage();
+    }
+
     // Serve landing page
     return serveLandingPage();
   },
@@ -147,6 +152,14 @@ function jsonResponse(data, status = 200) {
 function serveInstalledPage(url) {
   const installation_id = url.searchParams.get('installation_id') || 'unknown';
   const setup_action = url.searchParams.get('setup_action') || 'install';
+
+  // Redirect to complete-setup page to collect email
+  if (installation_id !== 'unknown') {
+    return Response.redirect(
+      `https://fixci.dev/complete-setup?installation_id=${installation_id}`,
+      302
+    );
+  }
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1366,3 +1379,296 @@ function serveLandingPage() {
     },
   });
 }
+
+
+function serveCompleteSetupPage() {
+  return new Response(completeSetupHTML, {
+    headers: {
+      "Content-Type": "text/html;charset=UTF-8",
+      "Cache-Control": "no-cache"
+    }
+  });
+}
+
+const completeSetupHTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Setup - FixCI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: #1e293b;
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border: 1px solid #334155;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo h1 {
+            color: #10b981;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .success-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 1.5rem;
+            background: #10b98120;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .success-icon svg {
+            width: 32px;
+            height: 32px;
+            color: #10b981;
+        }
+
+        h2 {
+            color: #f1f5f9;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.875rem;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #10b981;
+        }
+
+        button {
+            width: 100%;
+            padding: 1rem;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #059669;
+        }
+
+        button:disabled {
+            background: #334155;
+            cursor: not-allowed;
+        }
+
+        .message {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .message.success {
+            background: #10b98120;
+            border: 1px solid #10b981;
+            color: #10b981;
+        }
+
+        .message.error {
+            background: #ef444420;
+            border: 1px solid #ef4444;
+            color: #ef4444;
+        }
+
+        .note {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: #0f172a;
+            border-left: 3px solid #10b981;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>FixCI</h1>
+        </div>
+
+        <div id="form-container">
+            <div class="success-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+
+            <h2>Installation Successful!</h2>
+            <p class="subtitle">One last step to complete your setup</p>
+
+            <div id="message-container"></div>
+
+            <form id="setup-form">
+                <div class="form-group">
+                    <label for="email">Email Address *</label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        placeholder="you@company.com"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="company">Company/Organization (optional)</label>
+                    <input
+                        type="text"
+                        id="company"
+                        name="company"
+                        placeholder="Acme Inc"
+                    >
+                </div>
+
+                <button type="submit" id="submit-btn">Complete Setup</button>
+            </form>
+
+            <div class="note">
+                <strong>Why we need this:</strong><br>
+                We'll use your email to send you important updates about your FixCI subscription, usage alerts, and feature announcements.
+            </div>
+        </div>
+
+        <div id="success-container" style="display: none;">
+            <div class="success-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+
+            <h2>All Set!</h2>
+            <p class="subtitle">Your FixCI installation is ready to use</p>
+
+            <div class="message success">
+                Your email has been saved. We'll notify you when FixCI analyzes your first failed workflow.
+            </div>
+
+            <div class="note">
+                <strong>Next steps:</strong><br>
+                1. Push some code or create a pull request<br>
+                2. If a workflow fails, FixCI will automatically analyze it<br>
+                3. Check your PR for AI-powered failure explanations
+            </div>
+
+            <button onclick="window.close()">Close Window</button>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const installationId = urlParams.get('installation_id');
+
+        if (!installationId) {
+            document.getElementById('message-container').innerHTML =
+                '<div class="message error">Missing installation ID. Please try installing the app again.</div>';
+            document.getElementById('setup-form').style.display = 'none';
+        }
+
+        document.getElementById('setup-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const company = document.getElementById('company').value;
+            const submitBtn = document.getElementById('submit-btn');
+            const messageContainer = document.getElementById('message-container');
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+            messageContainer.innerHTML = '';
+
+            try {
+                const response = await fetch('https://fixci-github-app.adam-vegh.workers.dev/api/complete-setup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        installationId: parseInt(installationId),
+                        email,
+                        company
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to save information');
+                }
+
+                // Show success view
+                document.getElementById('form-container').style.display = 'none';
+                document.getElementById('success-container').style.display = 'block';
+
+            } catch (error) {
+                messageContainer.innerHTML = `<div class="message error">${error.message}</div>`;
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Complete Setup';
+            }
+        });
+    </script>
+</body>
+</html>
+`;

@@ -202,6 +202,27 @@ export default {
       return searchInstallations(request, env);
     }
 
+    // API: Complete setup - save contact info after installation
+    if (url.pathname === '/api/complete-setup' && request.method === 'POST') {
+      const { installationId, email, company } = await request.json();
+
+      if (!installationId || !email) {
+        return jsonResponse({ error: 'Missing installationId or email' }, 400);
+      }
+
+      // Update installation with contact info
+      await env.DB.prepare(`
+        UPDATE installations
+        SET contact_email = ?, company_name = ?
+        WHERE installation_id = ?
+      `).bind(email, company || null, installationId).run();
+
+      return jsonResponse({
+        success: true,
+        message: 'Contact information saved successfully'
+      });
+    }
+
     // API endpoint to check analysis status
     // This endpoint contains an intentional bug for testing FixCI
     if (url.pathname === '/api/analysis/status' && request.method === 'GET') {

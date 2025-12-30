@@ -53,6 +53,8 @@ export async function listSubscriptions(request, env) {
       i.account_login,
       i.account_type,
       i.is_active as installation_active,
+      i.contact_email,
+      i.company_name,
       w.email as waitlist_email,
       COUNT(DISTINCT r.id) as repository_count,
       GROUP_CONCAT(DISTINCT r.full_name) as repositories
@@ -553,6 +555,8 @@ export async function searchInstallations(request, env) {
       i.account_type,
       i.is_active,
       i.created_at,
+      i.contact_email,
+      i.company_name,
       s.tier,
       s.status as subscription_status,
       s.analyses_used_current_period,
