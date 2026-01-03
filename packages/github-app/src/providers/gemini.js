@@ -1,21 +1,24 @@
 /**
  * Google Gemini API Provider
- * Uses Gemini 2.0 Flash Lite for cost-effective analysis
+ * Uses Gemini 2.5 Flash-Lite for cost-effective analysis
  */
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const MODEL = 'gemini-2.0-flash-exp';
+const MODEL = 'gemini-2.5-flash-lite';
 
-// Pricing per million tokens (Gemini 2.0 Flash Lite experimental - free tier, then Flash pricing)
+// Pricing per million tokens (Gemini 2.5 Flash-Lite)
 const PRICING = {
-  input: 0.075,   // $0.075/MTok
-  output: 0.30,   // $0.30/MTok
+  input: 0.10,    // $0.10/MTok
+  output: 0.40,   // $0.40/MTok
 };
 
-export async function analyzeWithGemini(logs, context, env) {
-  const { workflowName, jobName, errorMessage } = context;
+export async function analyzeWithGemini(content, context, env) {
+  const prompt = buildPrompt(content, context);
 
-  const prompt = buildPrompt(logs, workflowName, jobName, errorMessage);
+  // Determine system instruction based on context
+  const systemInstruction = context.prNumber
+    ? 'You are an expert code reviewer. Provide constructive, actionable feedback on pull requests.'
+    : 'You are an expert CI/CD debugging assistant. Analyze build failures and provide actionable guidance in a structured format.';
 
   try {
     const startTime = Date.now();
@@ -30,7 +33,7 @@ export async function analyzeWithGemini(logs, context, env) {
         body: JSON.stringify({
           contents: [{
             parts: [{
-              text: `You are an expert CI/CD debugging assistant. Analyze build failures and provide actionable guidance in a structured format.\n\n${prompt}`
+              text: `${systemInstruction}\n\n${prompt}`
             }]
           }],
           generationConfig: {
@@ -80,7 +83,14 @@ export async function analyzeWithGemini(logs, context, env) {
   }
 }
 
-function buildPrompt(logs, workflowName, jobName, errorMessage) {
+function buildPrompt(content, context) {
+  // PR Review
+  if (context.prNumber) {
+    return buildPRReviewPrompt(content, context);
+  }
+
+  // Failure Analysis (original behavior)
+  const { workflowName, jobName, errorMessage } = context;
   return `Analyze this CI/CD build failure and provide actionable guidance.
 
 **Workflow**: ${workflowName || 'Unknown'}
@@ -89,7 +99,7 @@ ${errorMessage ? `**Error Message**: ${errorMessage}` : ''}
 
 **Build Logs**:
 \`\`\`
-${logs.slice(-8000)}
+${content.slice(-8000)}
 \`\`\`
 
 Provide your analysis in the following format:
@@ -112,6 +122,54 @@ Provide your analysis in the following format:
 [Rate your confidence: high/medium/low]
 
 Be concise, practical, and developer-friendly. Focus on actionable fixes.`;
+}
+
+function buildPRReviewPrompt(diff, context) {
+  const { prNumber, title, description, filesChanged, additions, deletions } = context;
+
+  return `You are an expert code reviewer. Review this pull request and provide constructive feedback.
+
+**PR #${prNumber}**: ${title}
+${description ? `**Description**: ${description}` : ''}
+
+**Changes**: ${filesChanged.length} files, +${additions} -${deletions} lines
+
+**Diff**:
+\`\`\`diff
+${diff.slice(-20000)}
+\`\`\`
+
+Provide your code review in the following format:
+
+## Summary
+[Brief overview of the changes and overall assessment]
+
+## Root Cause
+[Analysis of code quality, potential issues, best practices]
+
+## Suggested Fix
+[Specific improvements, refactoring suggestions, or concerns to address]
+
+For specific line issues, use this format:
+File: path/to/file.js, Line: 42, Issue: Description of the issue
+
+## Code Example
+\`\`\`
+[If applicable, show improved code examples]
+\`\`\`
+
+## Confidence
+[Rate your confidence in the review: high/medium/low]
+
+Focus on:
+- Code quality and maintainability
+- Potential bugs or edge cases
+- Security vulnerabilities
+- Performance concerns
+- Best practices and patterns
+- Testing coverage
+
+Be constructive, specific, and helpful. Prioritize important issues over minor style concerns.`;
 }
 
 function parseAnalysisResponse(text) {
