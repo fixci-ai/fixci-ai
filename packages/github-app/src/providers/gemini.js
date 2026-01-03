@@ -1,15 +1,15 @@
 /**
  * Google Gemini API Provider
- * Uses Gemini 2.0 Flash Lite for cost-effective analysis
+ * Uses Gemini 2.5 Flash-Lite for cost-effective analysis
  */
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const MODEL = 'gemini-2.0-flash-exp';
+const MODEL = 'gemini-2.5-flash-lite';
 
-// Pricing per million tokens (Gemini 2.0 Flash Lite experimental - free tier, then Flash pricing)
+// Pricing per million tokens (Gemini 2.5 Flash-Lite)
 const PRICING = {
-  input: 0.075,   // $0.075/MTok
-  output: 0.30,   // $0.30/MTok
+  input: 0.10,    // $0.10/MTok
+  output: 0.40,   // $0.40/MTok
 };
 
 export async function analyzeWithGemini(logs, context, env) {
