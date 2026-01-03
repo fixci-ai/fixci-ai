@@ -132,32 +132,22 @@ async function selectProvider(availableProviders, tier, env) {
     eligibleProviders = availableProviders;
   }
 
-  // Selection strategy based on tier
-  switch (tier) {
-    case 'free':
-      // Free tier: prefer cheapest providers (Cloudflare > Gemini)
-      if (eligibleProviders.includes('cloudflare')) return 'cloudflare';
-      if (eligibleProviders.includes('gemini')) return 'gemini';
-      return eligibleProviders[0];
-
-    case 'pro':
-      // Pro tier: prefer quality (Claude > OpenAI > Gemini > Cloudflare)
-      if (eligibleProviders.includes('claude')) return 'claude';
-      if (eligibleProviders.includes('openai')) return 'openai';
-      if (eligibleProviders.includes('gemini')) return 'gemini';
-      if (eligibleProviders.includes('cloudflare')) return 'cloudflare';
-      return eligibleProviders[0];
-
-    case 'enterprise':
-      // Enterprise: use round-robin for cost/quality balance
-      const provider = eligibleProviders[providerIndex % eligibleProviders.length];
+  // Selection strategy: respect tier configuration order
+  // The tier config defines provider priority, so return first available
+  for (const provider of allowedProviders) {
+    if (provider === 'all') {
+      // Enterprise tier with 'all' - use round-robin
+      const selected = eligibleProviders[providerIndex % eligibleProviders.length];
       providerIndex++;
+      return selected;
+    }
+    if (eligibleProviders.includes(provider)) {
       return provider;
-
-    default:
-      // Fallback to first available
-      return eligibleProviders[0];
+    }
   }
+
+  // Fallback to first eligible provider
+  return eligibleProviders[0];
 }
 
 /**

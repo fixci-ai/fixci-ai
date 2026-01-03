@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS installations (
   is_active BOOLEAN DEFAULT 1,
   permissions TEXT, -- JSON blob
   events TEXT, -- JSON blob of subscribed events
+  contact_email TEXT,
+  company_name TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
