@@ -7,7 +7,7 @@ export function LoginScreen() {
     const { login } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const [url, setUrl] = useState('https://fixci-github-app.adam-vegh.workers.dev');
+    const [url, setUrl] = useState('https://api.fixci.dev');
     const [key, setKey] = useState('');
 
     const handleSubmit = async (e: React.FormEvent) => {

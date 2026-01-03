@@ -85,9 +85,25 @@ export default {
 
     // API: Get subscription details
     if (url.pathname === '/api/subscription' && request.method === 'GET') {
+      // SECURITY: Require authentication
+      const auth = await verifySession(request, env);
+      if (!auth.authenticated) {
+        return jsonResponse({ error: 'Unauthorized' }, 401);
+      }
+
       const installationId = url.searchParams.get('installation_id');
       if (!installationId) {
         return jsonResponse({ error: 'Missing installation_id parameter' }, 400);
+      }
+
+      // SECURITY: Verify user has access to this installation
+      const hasAccess = await env.DB.prepare(`
+        SELECT 1 FROM installation_members
+        WHERE user_id = ? AND installation_id = ?
+      `).bind(auth.user.id, parseInt(installationId)).first();
+
+      if (!hasAccess) {
+        return jsonResponse({ error: 'Forbidden: No access to this installation' }, 403);
       }
 
       const subscription = await getSubscription(parseInt(installationId), env);
@@ -119,11 +135,27 @@ export default {
 
     // API: Get usage history
     if (url.pathname === '/api/usage/history' && request.method === 'GET') {
+      // SECURITY: Require authentication
+      const auth = await verifySession(request, env);
+      if (!auth.authenticated) {
+        return jsonResponse({ error: 'Unauthorized' }, 401);
+      }
+
       const installationId = url.searchParams.get('installation_id');
       const days = parseInt(url.searchParams.get('days') || '30');
 
       if (!installationId) {
         return jsonResponse({ error: 'Missing installation_id parameter' }, 400);
+      }
+
+      // SECURITY: Verify user has access to this installation
+      const hasAccess = await env.DB.prepare(`
+        SELECT 1 FROM installation_members
+        WHERE user_id = ? AND installation_id = ?
+      `).bind(auth.user.id, parseInt(installationId)).first();
+
+      if (!hasAccess) {
+        return jsonResponse({ error: 'Forbidden: No access to this installation' }, 403);
       }
 
       // Get daily usage stats
@@ -447,19 +479,29 @@ export default {
     // API endpoint to check analysis status
     // This endpoint contains an intentional bug for testing FixCI
     if (url.pathname === '/api/analysis/status' && request.method === 'GET') {
+      // SECURITY: Require authentication
+      const auth = await verifySession(request, env);
+      if (!auth.authenticated) {
+        return jsonResponse({ error: 'Unauthorized' }, 401);
+      }
+
       const analysisId = url.searchParams.get('id');
 
       if (!analysisId) {
         return jsonResponse({ error: 'Missing analysis ID' }, 400);
       }
 
-      // Fetch analysis from database
-      const analysis = await env.DB.prepare(
-        'SELECT * FROM analyses WHERE id = ?'
-      ).bind(analysisId).first();
+      // Fetch analysis from database and verify access
+      const analysis = await env.DB.prepare(`
+        SELECT a.* FROM analyses a
+        JOIN repositories r ON a.repo_id = r.id
+        JOIN installations i ON r.installation_id = i.installation_id
+        JOIN installation_members im ON i.installation_id = im.installation_id
+        WHERE a.id = ? AND im.user_id = ?
+      `).bind(analysisId, auth.user.id).first();
 
       if (!analysis) {
-        return jsonResponse({ error: 'Analysis not found' }, 404);
+        return jsonResponse({ error: 'Analysis not found or access denied' }, 404);
       }
 
       // Common bug: typo in variable name (analyis instead of analysis)

@@ -71,7 +71,7 @@ git push origin test-ci
 ### Deploy Workflow - `.github/workflows/deploy.yml`
 **Runs on:** Push to main (automatic)
 1. Deploy landing page → https://fixci.dev
-2. Deploy github-app → https://fixci-github-app.adam-vegh.workers.dev
+2. Deploy github-app → https://fixci-github-app.api.fixci.dev
 3. Run health checks
 
 ### Migration Workflow - `.github/workflows/migrate.yml`
@@ -104,7 +104,7 @@ Health Checks
 ```bash
 # Test manually:
 curl https://fixci.dev
-curl https://fixci-github-app.adam-vegh.workers.dev/health
+curl https://fixci-github-app.api.fixci.dev/health
 ```
 
 **Rollback:**

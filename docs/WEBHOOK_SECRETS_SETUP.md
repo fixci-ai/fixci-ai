@@ -75,7 +75,7 @@ npx wrangler secret list
 1. Go to https://dashboard.stripe.com/webhooks
 2. Click **"Add endpoint"**
 3. Configure:
-   - **Endpoint URL**: `https://fixci-github-app.adam-vegh.workers.dev/stripe/webhook`
+   - **Endpoint URL**: `https://fixci-github-app.api.fixci.dev/stripe/webhook`
    - **Events to send**:
      - ✅ `checkout.session.completed`
      - ✅ `customer.subscription.created`

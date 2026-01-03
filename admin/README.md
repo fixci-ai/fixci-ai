@@ -64,7 +64,7 @@ php -S localhost:8080
    - Or open `dashboard.html` directly in your browser
 
 3. **Login**
-   - Worker URL: `https://fixci-github-app.adam-vegh.workers.dev`
+   - Worker URL: `https://fixci-github-app.api.fixci.dev`
    - Admin API Key: (the key you set above)
    - Click "Connect to Dashboard"
 
@@ -165,7 +165,7 @@ Or query directly:
 ```bash
 # Via API
 curl -H "Authorization: Bearer YOUR_KEY" \
-  "https://fixci-github-app.adam-vegh.workers.dev/admin/subscriptions"
+  "https://fixci-github-app.api.fixci.dev/admin/subscriptions"
 
 # Via database
 npx wrangler d1 execute fixci-db --remote --command \

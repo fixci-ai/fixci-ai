@@ -1641,7 +1641,7 @@ const completeSetupHTML = `
             messageContainer.innerHTML = '';
 
             try {
-                const response = await fetch('https://fixci-github-app.adam-vegh.workers.dev/api/complete-setup', {
+                const response = await fetch('https://api.fixci.dev/api/complete-setup', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

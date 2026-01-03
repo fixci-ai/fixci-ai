@@ -61,7 +61,7 @@ jobs:
         if: success()
         run: |
           echo "✅ GitHub App Worker deployed successfully"
-          echo "🔗 Live at: https://fixci-github-app.adam-vegh.workers.dev"
+          echo "🔗 Live at: https://api.fixci.dev"
 
   health-check:
     runs-on: ubuntu-latest
@@ -83,7 +83,7 @@ jobs:
       - name: Check GitHub App Worker
         run: |
           echo "Checking GitHub App Worker health..."
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://fixci-github-app.adam-vegh.workers.dev/health)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.fixci.dev/health)
           if [ $STATUS -eq 200 ]; then
             echo "✅ GitHub App Worker is healthy (HTTP $STATUS)"
           else
@@ -100,7 +100,7 @@ jobs:
           echo ""
           echo "📦 Deployed Services:"
           echo "  • Landing Page: https://fixci.dev"
-          echo "  • GitHub App: https://fixci-github-app.adam-vegh.workers.dev"
+          echo "  • GitHub App: https://api.fixci.dev"
           echo ""
           echo "✅ All health checks passed"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

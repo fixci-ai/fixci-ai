@@ -94,7 +94,7 @@ Dashboard loads → Fetch /api/me (with cookie) → Display user data
 
 **Purpose:** Backend API, business logic
 
-**URL:** `https://fixci-github-app.adam-vegh.workers.dev`
+**URL:** `https://fixci-github-app.api.fixci.dev`
 
 **Tech:** JavaScript/TypeScript
 
