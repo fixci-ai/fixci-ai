@@ -7,6 +7,6 @@
     "upload": "node -r dotenv/config upload-to-confluence.js"
   },
   "dependencies": {
-    "dotenv": "^16.3.1"
+    "dotenv": "^17.2.3"
   }
 }
