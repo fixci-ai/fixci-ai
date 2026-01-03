@@ -1,0 +1,83 @@
+version: 2
+updates:
+  # GitHub App package
+  - package-ecosystem: "npm"
+    directory: "/packages/github-app"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    reviewers:
+      - "fixci-ai"
+    assignees:
+      - "fixci-ai"
+
+  # Admin Dashboard v2
+  - package-ecosystem: "npm"
+    directory: "/admin-v2"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
+      - "admin"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Landing Page
+  - package-ecosystem: "npm"
+    directory: "/apps/landing"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
+      - "landing"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Documentation
+  - package-ecosystem: "npm"
+    directory: "/docs"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "automated"
+      - "docs"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "automated"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"

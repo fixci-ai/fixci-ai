@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability
+    url: https://github.com/fixci-ai/fixci-ai/blob/main/SECURITY.md
+    about: Please report security vulnerabilities privately to security@fixci.dev
+  - name: Documentation
+    url: https://github.com/fixci-ai/fixci-ai/blob/main/docs/README.md
+    about: Read our comprehensive documentation
+  - name: Discord Community
+    url: https://discord.gg/fixci
+    about: Join our Discord for questions and discussions
+  - name: Support
+    url: mailto:support@fixci.dev
+    about: Email us for general support questions
