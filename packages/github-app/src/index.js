@@ -5,6 +5,7 @@ import { handleStripeWebhook, createCheckoutSession, createPortalSession } from 
 import { listSubscriptions, grantSubscription, updateSubscriptionStatus, getSubscriptionDetails, resetUsage, getStats, listWaitlist, searchInstallations, revokeSubscription, getInstallationMembers, listInstallations } from './admin.js';
 import { sendLoginLink, verifyToken, verifySession, logout } from './auth.js';
 import { checkRateLimit, getClientIP, rateLimitResponse } from './ratelimit.js';
+import { validateInput, validationSchemas, validationErrorResponse } from './validation.js';
 
 /**
  * FixCI GitHub App - Webhook Handler
@@ -83,26 +84,24 @@ export default {
         return rateLimitResponse(rateLimit.resetAt);
       }
 
-      const { installationId, tier } = await request.json();
+      // SECURITY: Validate and sanitize input
+      const body = await request.json();
+      const validation = validateInput(body, validationSchemas.billingCheckout);
 
-      if (!installationId || !tier) {
-        return jsonResponse({ error: 'Missing required fields: installationId, tier' }, 400, request);
+      if (!validation.success) {
+        return validationErrorResponse(validation.errors, request);
       }
+
+      const { installationId, tier } = validation.data;
 
       // SECURITY: Verify user has access to this installation
       const hasAccess = await env.DB.prepare(`
         SELECT 1 FROM installation_members
         WHERE user_id = ? AND installation_id = ?
-      `).bind(auth.user.id, parseInt(installationId)).first();
+      `).bind(auth.user.id, installationId).first();
 
       if (!hasAccess) {
         return jsonResponse({ error: 'Forbidden: No access to this installation' }, 403, request);
-      }
-
-      // SECURITY: Validate tier is allowed
-      const validTiers = ['pro', 'enterprise'];
-      if (!validTiers.includes(tier)) {
-        return jsonResponse({ error: `Invalid tier. Must be one of: ${validTiers.join(', ')}` }, 400, request);
       }
 
       const session = await createCheckoutSession(installationId, tier, env);
@@ -123,17 +122,21 @@ export default {
         return rateLimitResponse(rateLimit.resetAt);
       }
 
-      const { installationId } = await request.json();
+      // SECURITY: Validate and sanitize input
+      const body = await request.json();
+      const validation = validateInput(body, validationSchemas.billingPortal);
 
-      if (!installationId) {
-        return jsonResponse({ error: 'Missing required field: installationId' }, 400, request);
+      if (!validation.success) {
+        return validationErrorResponse(validation.errors, request);
       }
+
+      const { installationId } = validation.data;
 
       // SECURITY: Verify user has access to this installation
       const hasAccess = await env.DB.prepare(`
         SELECT 1 FROM installation_members
         WHERE user_id = ? AND installation_id = ?
-      `).bind(auth.user.id, parseInt(installationId)).first();
+      `).bind(auth.user.id, installationId).first();
 
       if (!hasAccess) {
         return jsonResponse({ error: 'Forbidden: No access to this installation' }, 403, request);
