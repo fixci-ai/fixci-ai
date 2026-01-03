@@ -529,6 +529,61 @@ export async function listWaitlist(request, env) {
 }
 
 /**
+ * List all installations with pagination
+ */
+export async function listInstallations(request, env) {
+  const auth = verifyAdminAuth(request, env);
+  if (!auth.authorized) {
+    return jsonResponse({ error: auth.error }, 401);
+  }
+
+  const url = new URL(request.url);
+  const limit = parseInt(url.searchParams.get('limit') || '50');
+  const offset = parseInt(url.searchParams.get('offset') || '0');
+
+  // List all installations with subscription info
+  const installations = await env.DB.prepare(`
+    SELECT
+      i.installation_id,
+      i.account_login,
+      i.account_type,
+      i.is_active,
+      i.created_at,
+      i.contact_email,
+      i.company_name,
+      s.tier,
+      s.status as subscription_status,
+      s.analyses_used_current_period,
+      s.analyses_limit_monthly,
+      COUNT(DISTINCT r.id) as repository_count,
+      GROUP_CONCAT(DISTINCT r.full_name) as repositories,
+      w.email as waitlist_email
+    FROM installations i
+    LEFT JOIN subscriptions s ON i.installation_id = s.installation_id
+    LEFT JOIN repositories r ON i.installation_id = r.installation_id
+    LEFT JOIN waitlist w ON LOWER(i.account_login) = LOWER(SUBSTR(w.email, 1, INSTR(w.email, '@') - 1))
+    GROUP BY i.installation_id
+    ORDER BY i.created_at DESC
+    LIMIT ? OFFSET ?
+  `).bind(limit, offset).all();
+
+  // Get total count
+  const countResult = await env.DB.prepare(
+    'SELECT COUNT(*) as total FROM installations'
+  ).first();
+
+  return jsonResponse({
+    installations: installations.results,
+    pagination: {
+      total: countResult.total,
+      limit,
+      offset,
+      hasMore: offset + limit < countResult.total
+    }
+  });
+}
+
+/**
  * Search installations by account name or login
  */
 export async function searchInstallations(request, env) {
