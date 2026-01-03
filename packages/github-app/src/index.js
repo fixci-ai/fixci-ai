@@ -6,6 +6,7 @@ import { listSubscriptions, grantSubscription, updateSubscriptionStatus, getSubs
 import { sendLoginLink, verifyToken, verifySession, logout } from './auth.js';
 import { checkRateLimit, getClientIP, rateLimitResponse } from './ratelimit.js';
 import { validateInput, validationSchemas, validationErrorResponse } from './validation.js';
+import { reviewPullRequest } from './pr-review.js';
 
 /**
  * FixCI GitHub App - Webhook Handler
@@ -644,6 +645,9 @@ async function handleWebhook(request, env, ctx) {
       case 'workflow_run':
         return await handleWorkflowRun(data, env, ctx);
 
+      case 'pull_request':
+        return await handlePullRequest(data, env, ctx);
+
       case 'installation':
       case 'installation_repositories':
         return await handleInstallation(data, env);
@@ -803,6 +807,39 @@ async function getOrCreateRepository(repository, env) {
     name: repository.name,
     full_name: repository.full_name
   };
+}
+
+async function handlePullRequest(data, env, ctx) {
+  const { action, pull_request, repository, installation } = data;
+
+  console.log(`PR ${action}: #${pull_request.number} in ${repository.full_name}`);
+
+  // Only review on opened, synchronize (new commits)
+  if (!['opened', 'synchronize'].includes(action)) {
+    return jsonResponse({ message: 'PR event received but not reviewed' });
+  }
+
+  try {
+    const installationId = installation?.id;
+
+    if (!installationId) {
+      console.error('No installation ID in PR webhook');
+      return jsonResponse({ error: 'No installation ID' }, 400);
+    }
+
+    // Run PR review asynchronously
+    ctx.waitUntil(
+      reviewPullRequest(pull_request, repository, installationId, env)
+    );
+
+    return jsonResponse({
+      message: 'PR review started',
+      prNumber: pull_request.number
+    });
+  } catch (error) {
+    console.error('Error handling PR:', error);
+    return jsonResponse({ error: 'Failed to process PR' }, 500);
+  }
 }
 
 async function handleInstallation(data, env) {
