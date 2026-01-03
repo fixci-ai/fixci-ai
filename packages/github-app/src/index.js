@@ -71,16 +71,76 @@ export default {
 
     // Billing checkout endpoint
     if (url.pathname === '/billing/checkout' && request.method === 'POST') {
+      // SECURITY: Require authentication
+      const auth = await verifySession(request, env);
+      if (!auth.authenticated) {
+        return jsonResponse({ error: 'Unauthorized' }, 401, request);
+      }
+
+      // SECURITY: Rate limit billing operations (5 per hour per user)
+      const rateLimit = await checkRateLimit(`billing:${auth.user.id}`, 5, 3600, env);
+      if (!rateLimit.allowed) {
+        return rateLimitResponse(rateLimit.resetAt);
+      }
+
       const { installationId, tier } = await request.json();
+
+      if (!installationId || !tier) {
+        return jsonResponse({ error: 'Missing required fields: installationId, tier' }, 400, request);
+      }
+
+      // SECURITY: Verify user has access to this installation
+      const hasAccess = await env.DB.prepare(`
+        SELECT 1 FROM installation_members
+        WHERE user_id = ? AND installation_id = ?
+      `).bind(auth.user.id, parseInt(installationId)).first();
+
+      if (!hasAccess) {
+        return jsonResponse({ error: 'Forbidden: No access to this installation' }, 403, request);
+      }
+
+      // SECURITY: Validate tier is allowed
+      const validTiers = ['pro', 'enterprise'];
+      if (!validTiers.includes(tier)) {
+        return jsonResponse({ error: `Invalid tier. Must be one of: ${validTiers.join(', ')}` }, 400, request);
+      }
+
       const session = await createCheckoutSession(installationId, tier, env);
-      return jsonResponse({ url: session.url });
+      return jsonResponse({ url: session.url }, 200, request);
     }
 
     // Billing portal endpoint
     if (url.pathname === '/billing/portal' && request.method === 'POST') {
+      // SECURITY: Require authentication
+      const auth = await verifySession(request, env);
+      if (!auth.authenticated) {
+        return jsonResponse({ error: 'Unauthorized' }, 401, request);
+      }
+
+      // SECURITY: Rate limit billing operations (10 per hour per user)
+      const rateLimit = await checkRateLimit(`billing-portal:${auth.user.id}`, 10, 3600, env);
+      if (!rateLimit.allowed) {
+        return rateLimitResponse(rateLimit.resetAt);
+      }
+
       const { installationId } = await request.json();
+
+      if (!installationId) {
+        return jsonResponse({ error: 'Missing required field: installationId' }, 400, request);
+      }
+
+      // SECURITY: Verify user has access to this installation
+      const hasAccess = await env.DB.prepare(`
+        SELECT 1 FROM installation_members
+        WHERE user_id = ? AND installation_id = ?
+      `).bind(auth.user.id, parseInt(installationId)).first();
+
+      if (!hasAccess) {
+        return jsonResponse({ error: 'Forbidden: No access to this installation' }, 403, request);
+      }
+
       const session = await createPortalSession(installationId, env);
-      return jsonResponse({ url: session.url });
+      return jsonResponse({ url: session.url }, 200, request);
     }
 
     // API: Get subscription details

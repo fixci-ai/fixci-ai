@@ -146,6 +146,10 @@ export const RATE_LIMITS = {
   VERIFY: { maxRequests: 10, windowSeconds: 900 },        // 10 per 15 minutes
   AUTH_GENERAL: { maxRequests: 20, windowSeconds: 300 },  // 20 per 5 minutes
 
+  // Billing endpoints (stricter limits for financial operations)
+  BILLING_CHECKOUT: { maxRequests: 5, windowSeconds: 3600 },   // 5 per hour
+  BILLING_PORTAL: { maxRequests: 10, windowSeconds: 3600 },    // 10 per hour
+
   // API endpoints
   API_READ: { maxRequests: 100, windowSeconds: 60 },      // 100 per minute
   API_WRITE: { maxRequests: 30, windowSeconds: 60 },      // 30 per minute
