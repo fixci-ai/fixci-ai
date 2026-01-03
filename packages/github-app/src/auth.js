@@ -6,6 +6,26 @@
 import { sendMagicLink } from './email.js';
 
 /**
+ * Parse cookies from Cookie header string
+ * @param {string} cookieHeader - The Cookie header value
+ * @returns {Object} Object with cookie name-value pairs
+ */
+function parseCookies(cookieHeader) {
+  const cookies = {};
+  if (!cookieHeader) return cookies;
+
+  cookieHeader.split(';').forEach(cookie => {
+    const [name, ...rest] = cookie.split('=');
+    const value = rest.join('=').trim();
+    if (name && value) {
+      cookies[name.trim()] = decodeURIComponent(value);
+    }
+  });
+
+  return cookies;
+}
+
+/**
  * Generate a secure random token for magic links and sessions
  * @returns {string} 64-character hex token
  */
@@ -20,9 +40,10 @@ function generateToken() {
  * Creates or finds user, generates token, sends email
  * @param {string} email - User's email address
  * @param {object} env - Environment bindings
+ * @param {object} metadata - Optional metadata (installationId, company, etc.)
  * @returns {Promise<{success: boolean, message: string}>}
  */
-export async function sendLoginLink(email, env) {
+export async function sendLoginLink(email, env, metadata = {}) {
   // Find or create user
   let user = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
 
@@ -45,7 +66,11 @@ export async function sendLoginLink(email, env) {
   `).bind(user.id, token, expiresAt).run();
 
   // Also store in KV for fast validation (auto-expires)
-  await env.SESSIONS.put(token, JSON.stringify({ userId: user.id, email }), {
+  await env.SESSIONS.put(token, JSON.stringify({
+    userId: user.id,
+    email,
+    metadata // Store installation/company metadata for use during verification
+  }), {
     expirationTtl: 600 // 10 minutes
   });
 
@@ -81,7 +106,8 @@ export async function verifyToken(token, env) {
     return { valid: false, error: 'Invalid or expired token' };
   }
 
-  const { userId, email } = JSON.parse(kvData);
+  const parsedData = JSON.parse(kvData);
+  const { userId, email, metadata = {} } = parsedData;
 
   // Verify in D1 and check expiration
   const session = await env.DB.prepare(`
@@ -98,6 +124,28 @@ export async function verifyToken(token, env) {
   // Delete one-time magic link token
   await env.DB.prepare('DELETE FROM auth_sessions WHERE token = ?').bind(token).run();
   await env.SESSIONS.delete(token);
+
+  // If metadata contains installationId, create user-installation relationship
+  if (metadata.installationId) {
+    try {
+      // Check if relationship already exists
+      const existing = await env.DB.prepare(`
+        SELECT 1 FROM installation_members
+        WHERE user_id = ? AND installation_id = ?
+      `).bind(userId, parseInt(metadata.installationId)).first();
+
+      if (!existing) {
+        // Create installation_member relationship
+        await env.DB.prepare(`
+          INSERT INTO installation_members (user_id, installation_id, role)
+          VALUES (?, ?, 'owner')
+        `).bind(userId, parseInt(metadata.installationId)).run();
+      }
+    } catch (error) {
+      console.error('Failed to create installation_member relationship:', error);
+      // Continue anyway - authentication should still work
+    }
+  }
 
   // Create long-lived session token (30 days)
   const sessionToken = generateToken();
@@ -123,21 +171,36 @@ export async function verifyToken(token, env) {
 
 /**
  * Verify session token (for protected routes)
- * @param {Request} request - HTTP request with Authorization header
+ * Supports both httpOnly cookies (for browsers) and Authorization header (for API clients)
+ * @param {Request} request - HTTP request with session cookie or Authorization header
  * @param {object} env - Environment bindings
  * @returns {Promise<{authenticated: boolean, user?: object, error?: string}>}
  */
 export async function verifySession(request, env) {
-  const authHeader = request.headers.get('Authorization');
+  let token = null;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return {
-      authenticated: false,
-      error: 'Missing or invalid authorization header'
-    };
+  // PRIORITY 1: Check for httpOnly cookie (browser sessions)
+  const cookieHeader = request.headers.get('Cookie');
+  if (cookieHeader) {
+    const cookies = parseCookies(cookieHeader);
+    token = cookies.session;
   }
 
-  const token = authHeader.substring(7); // Remove "Bearer "
+  // PRIORITY 2: Fallback to Authorization header (API clients, backward compatibility)
+  if (!token) {
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7); // Remove "Bearer "
+    }
+  }
+
+  // No token found in either location
+  if (!token) {
+    return {
+      authenticated: false,
+      error: 'Missing session cookie or authorization header'
+    };
+  }
 
   // Check KV for fast lookup
   const kvData = await env.SESSIONS.get(token);
