@@ -524,6 +524,14 @@ export default {
 
 async function handleWebhook(request, env, ctx) {
   try {
+    // SECURITY: Rate limit webhook endpoint (500 per minute per IP)
+    const clientIP = getClientIP(request);
+    const rateLimit = await checkRateLimit(`webhook:${clientIP}`, 500, 60, env);
+    if (!rateLimit.allowed) {
+      console.warn(`Webhook rate limit exceeded for IP: ${clientIP}`);
+      return rateLimitResponse(rateLimit.resetAt);
+    }
+
     // Verify GitHub webhook signature
     const signature = request.headers.get('x-hub-signature-256');
     const event = request.headers.get('x-github-event');
@@ -531,6 +539,23 @@ async function handleWebhook(request, env, ctx) {
 
     if (!signature || !event) {
       return new Response('Missing headers', { status: 400 });
+    }
+
+    // SECURITY: Prevent webhook replay attacks
+    if (delivery) {
+      const deliveryKey = `webhook-delivery:${delivery}`;
+      const alreadyProcessed = await env.SESSIONS.get(deliveryKey);
+
+      if (alreadyProcessed) {
+        console.warn(`Duplicate webhook delivery: ${delivery}`);
+        return new Response(JSON.stringify({ message: 'Webhook already processed' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Mark delivery as processed (expires in 24 hours)
+      await env.SESSIONS.put(deliveryKey, Date.now().toString(), { expirationTtl: 86400 });
     }
 
     const payload = await request.text();
