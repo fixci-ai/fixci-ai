@@ -1101,7 +1101,7 @@ function serveLandingPage() {
                 <a href="https://github.com/fixci-ai/docs" class="nav-link" target="_blank">Docs</a>
                 <div class="status-badge">
                     <span class="status-dot"></span>
-                    Coming Soon
+                    Open Beta
                 </div>
             </div>
         </div>
@@ -1114,19 +1114,19 @@ function serveLandingPage() {
         <div class="container">
             <div class="hero-content">
                 <h1>
-                    AI that explains <span class="gradient-text">why your pipeline broke</span>
+                    AI that <span class="gradient-text">reviews your code</span> and fixes your <span class="gradient-text">pipeline</span>
                 </h1>
                 <p class="hero-description">
-                    Stop scrolling through cryptic build logs. FixCI analyzes CI/CD failures and tells you what went wrong — in plain English.
+                    Get instant code reviews on every PR and automatic analysis when builds fail. FixCI catches bugs before merge and explains errors in plain English.
                 </p>
                 <div class="cta-group">
-                    <a href="/install" class="btn btn-primary" style="text-decoration: none; display: inline-block;">Add to GitHub</a>
-                    <button class="btn btn-secondary" onclick="scrollToWaitlist()">Join Waitlist</button>
+                    <a href="/install" class="btn btn-primary" style="text-decoration: none; display: inline-block;">Get Started Free</a>
+                    <a href="https://github.com/fixci-ai/docs" class="btn btn-secondary" style="text-decoration: none; display: inline-block;" target="_blank">View Docs</a>
                 </div>
                 <div class="stats">
                     <div class="stat">
-                        <div class="stat-number">500+</div>
-                        <div class="stat-label">Developers waiting</div>
+                        <div class="stat-number">&lt;10s</div>
+                        <div class="stat-label">Review time</div>
                     </div>
                     <div class="stat">
                         <div class="stat-number">3min</div>
@@ -1146,9 +1146,9 @@ function serveLandingPage() {
         <div class="container">
             <div class="section-header reveal">
                 <div class="section-tag">The Problem</div>
-                <h2>CI failures waste <span class="gradient-text">hours</span> of your time</h2>
+                <h2>Code review and CI failures waste <span class="gradient-text">hours</span></h2>
                 <p class="section-description">
-                    Your build failed. Now you're scrolling through 500 lines of logs, searching Stack Overflow, and context-switching away from actual work.
+                    Bugs slip into PRs, builds fail mysteriously, and you're stuck scrolling through logs and reviewing every line manually. Time wasted that could be spent shipping features.
                 </p>
             </div>
 
@@ -1212,26 +1212,26 @@ function serveLandingPage() {
         <div class="container">
             <div class="section-header reveal">
                 <div class="section-tag">How It Works</div>
-                <h2>Three steps to <span class="gradient-text">faster debugging</span></h2>
+                <h2>Three steps to <span class="gradient-text">faster development</span></h2>
             </div>
 
             <div class="steps">
                 <div class="step reveal">
                     <div class="step-number">01</div>
                     <h3>Connect your repo</h3>
-                    <p>Install the GitHub App with one click. Works with GitHub Actions, GitLab CI, CircleCI, and more.</p>
+                    <p>Install the GitHub App with one click. FixCI starts monitoring your PRs and workflows immediately.</p>
                 </div>
 
                 <div class="step reveal">
                     <div class="step-number">02</div>
-                    <h3>Pipeline fails</h3>
-                    <p>FixCI automatically detects failures and analyzes the logs using advanced AI models.</p>
+                    <h3>Open a PR</h3>
+                    <p>AI reviews your code for bugs, security issues, and best practices. Get inline comments on specific lines.</p>
                 </div>
 
                 <div class="step reveal">
                     <div class="step-number">03</div>
-                    <h3>Get instant answers</h3>
-                    <p>Receive a Slack message or PR comment explaining the issue and how to fix it — in seconds.</p>
+                    <h3>Build fails? No problem</h3>
+                    <p>FixCI automatically analyzes failure logs and posts a comment explaining the issue and how to fix it.</p>
                 </div>
             </div>
         </div>
@@ -1278,24 +1278,15 @@ function serveLandingPage() {
     <section class="section">
         <div class="container">
             <div class="cta-section reveal">
-                <h2>Ship faster. <span class="gradient-text">Debug less.</span></h2>
+                <h2>Ready to ship faster?</h2>
                 <p class="section-description" style="margin-top: 1rem;">
-                    Join the waitlist and be first to try FixCI when we launch.
+                    Start getting AI-powered code reviews and CI/CD failure analysis today.
                 </p>
-                <form class="waitlist-form" id="waitlist-form">
-                    <input type="email" class="email-input" placeholder="your@email.com" required id="email-input">
-                    <input type="url" class="email-input" placeholder="https://github.com/yourname/your-repo" required id="repo-input" style="margin-top: 0.75rem;">
-                    <button type="submit" class="btn btn-primary">Join Waitlist</button>
-                </form>
-                <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.75rem;">
-                    Enter the GitHub repository where you want FixCI to analyze CI failures.
-                </p>
-                <div class="message success" id="success-message">
-                    You're on the list! We'll notify you when FixCI launches.
+                <div class="cta-group" style="justify-content: center; margin-top: 2rem;">
+                    <a href="/install" class="btn btn-primary" style="text-decoration: none; display: inline-block;">Add to GitHub - It's Free</a>
                 </div>
-                <div class="message error" id="error-message"></div>
                 <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 1rem;">
-                    Free tier available. No spam, ever.
+                    Free tier available. No credit card required.
                 </p>
             </div>
         </div>
@@ -1325,50 +1316,16 @@ function serveLandingPage() {
         window.addEventListener('scroll', revealOnScroll);
         revealOnScroll(); // Initial check
 
-        // Scroll to waitlist function
-        function scrollToWaitlist() {
-            document.querySelector('.cta-section').scrollIntoView({
-                behavior: 'smooth'
-            });
-        }
-
-        // Form submission
-        document.getElementById('waitlist-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('email-input').value;
-            const repository = document.getElementById('repo-input').value;
-            const button = e.target.querySelector('button');
-            const successEl = document.getElementById('success-message');
-            const errorEl = document.getElementById('error-message');
-            const form = document.getElementById('waitlist-form');
-
-            button.disabled = true;
-            button.textContent = 'Joining...';
-            errorEl.classList.remove('show');
-            successEl.classList.remove('show');
-
-            try {
-                const res = await fetch('/api/waitlist', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, repository })
-                });
-
-                const data = await res.json();
-
-                if (res.ok) {
-                    form.style.display = 'none';
-                    successEl.classList.add('show');
-                } else {
-                    throw new Error(data.error || 'Something went wrong');
+        // Reveal on scroll animation
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
                 }
-            } catch (err) {
-                errorEl.textContent = err.message;
-                errorEl.classList.add('show');
-                button.disabled = false;
-                button.textContent = 'Join Waitlist';
-            }
-        });
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     </script>
 </body>
 </html>`;
