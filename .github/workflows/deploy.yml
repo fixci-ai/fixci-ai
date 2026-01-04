@@ -20,16 +20,14 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
       - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: '.'
-          command: deploy --config wrangler.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: wrangler deploy --config wrangler.jsonc
 
       - name: Deployment notification
         if: success()
@@ -52,16 +50,15 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
       - name: Deploy GitHub App Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: 'packages/github-app'
-          command: deploy --config wrangler.toml
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: packages/github-app
+        run: wrangler deploy
 
       - name: Deployment notification
         if: success()
