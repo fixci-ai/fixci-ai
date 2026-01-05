@@ -395,9 +395,7 @@ export default {
       } catch (err) {
         console.error('Login error:', err);
         return jsonResponse({
-          error: 'Failed to send login link',
-          details: err.message,
-          stack: err.stack
+          error: 'Failed to send login link'
         }, 500);
       }
     }
@@ -566,7 +564,7 @@ export default {
 
       // Common bug: typo in variable name (analyis instead of analysis)
       return jsonResponse({
-        id: analyis.id,
+        id: analysis.id,
         status: analysis.analysis_status,
         workflow: analysis.workflow_name,
         createdAt: analysis.created_at
@@ -601,6 +599,20 @@ async function handleWebhook(request, env, ctx) {
       return new Response('Missing headers', { status: 400 });
     }
 
+    const payload = await request.text();
+
+    // SECURITY: Verify GitHub webhook signature (MANDATORY)
+    if (!env.GITHUB_WEBHOOK_SECRET) {
+      console.error('GITHUB_WEBHOOK_SECRET not configured');
+      return new Response('Webhook secret not configured', { status: 500 });
+    }
+
+    const isValid = await verifySignature(payload, signature, env.GITHUB_WEBHOOK_SECRET);
+    if (!isValid) {
+      console.error('Invalid webhook signature');
+      return new Response('Invalid signature', { status: 401 });
+    }
+
     // SECURITY: Prevent webhook replay attacks
     if (delivery) {
       const deliveryKey = `webhook-delivery:${delivery}`;
@@ -616,20 +628,6 @@ async function handleWebhook(request, env, ctx) {
 
       // Mark delivery as processed (expires in 24 hours)
       await env.SESSIONS.put(deliveryKey, Date.now().toString(), { expirationTtl: 86400 });
-    }
-
-    const payload = await request.text();
-
-    // SECURITY: Verify GitHub webhook signature (MANDATORY)
-    if (!env.GITHUB_WEBHOOK_SECRET) {
-      console.error('GITHUB_WEBHOOK_SECRET not configured');
-      return new Response('Webhook secret not configured', { status: 500 });
-    }
-
-    const isValid = await verifySignature(payload, signature, env.GITHUB_WEBHOOK_SECRET);
-    if (!isValid) {
-      console.error('Invalid webhook signature');
-      return new Response('Invalid signature', { status: 401 });
     }
 
     const data = JSON.parse(payload);
@@ -861,7 +859,17 @@ async function verifySignature(payload, signature, secret) {
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 
-  return signature === expectedSignature;
+  return timingSafeEqualString(signature, expectedSignature);
+}
+
+function timingSafeEqualString(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
 }
 
 /**

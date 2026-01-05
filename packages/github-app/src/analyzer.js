@@ -17,68 +17,59 @@ let providerIndex = 0;
  * Selects provider based on subscription tier
  */
 export async function analyzeFailure(logs, context, env, tier = 'free') {
-  // Get available providers based on configured API keys
   const availableProviders = getAvailableProviders(env);
-
   if (availableProviders.length === 0) {
     throw new Error('No AI providers configured. Please set at least one API key.');
   }
 
-  // Select provider based on subscription tier
-  const provider = await selectProvider(availableProviders, tier, env);
+  const eligibleProviders = await getEligibleProviders(availableProviders, tier, env);
+  const providerOrder = buildProviderOrder(eligibleProviders);
 
-  console.log(`Analyzing with provider: ${provider} (tier: ${tier})`);
+  let lastError = null;
+  for (const provider of providerOrder) {
+    console.log(`Analyzing with provider: ${provider} (tier: ${tier})`);
 
-  try {
-    let result;
+    try {
+      let result;
 
-    switch (provider) {
-      case 'cloudflare':
-        result = await analyzeWithCloudflare(logs, context, env);
-        break;
-      case 'claude':
-        result = await analyzeWithClaude(logs, context, env);
-        break;
-      case 'openai':
-        result = await analyzeWithOpenAI(logs, context, env);
-        break;
-      case 'gemini':
-        result = await analyzeWithGemini(logs, context, env);
-        break;
-      default:
-        throw new Error(`Unknown provider: ${provider}`);
+      switch (provider) {
+        case 'cloudflare':
+          result = await analyzeWithCloudflare(logs, context, env);
+          break;
+        case 'claude':
+          result = await analyzeWithClaude(logs, context, env);
+          break;
+        case 'openai':
+          result = await analyzeWithOpenAI(logs, context, env);
+          break;
+        case 'gemini':
+          result = await analyzeWithGemini(logs, context, env);
+          break;
+        default:
+          throw new Error(`Unknown provider: ${provider}`);
+      }
+
+      return {
+        ai_provider: result.provider,
+        model_used: result.model,
+        issue_summary: result.analysis.summary,
+        root_cause: result.analysis.rootCause,
+        suggested_fix: result.analysis.fix,
+        code_example: result.analysis.codeExample,
+        confidence_score: result.analysis.confidence,
+        processing_time_ms: result.processingTime,
+        input_tokens: result.inputTokens,
+        output_tokens: result.outputTokens,
+        token_count: result.totalTokens,
+        estimated_cost_usd: result.estimatedCost,
+      };
+    } catch (error) {
+      lastError = error;
+      console.error(`Analysis with ${provider} failed:`, error);
     }
-
-    // Return standardized response
-    return {
-      ai_provider: result.provider,
-      model_used: result.model,
-      issue_summary: result.analysis.summary,
-      root_cause: result.analysis.rootCause,
-      suggested_fix: result.analysis.fix,
-      code_example: result.analysis.codeExample,
-      confidence_score: result.analysis.confidence,
-      processing_time_ms: result.processingTime,
-      input_tokens: result.inputTokens,
-      output_tokens: result.outputTokens,
-      token_count: result.totalTokens,
-      estimated_cost_usd: result.estimatedCost,
-    };
-  } catch (error) {
-    console.error(`Analysis with ${provider} failed:`, error);
-
-    // Try fallback to next provider if available
-    if (availableProviders.length > 1) {
-      console.log('Attempting fallback to next provider...');
-      const nextProvider = availableProviders[(providerIndex + 1) % availableProviders.length];
-      providerIndex = (providerIndex + 1) % availableProviders.length;
-
-      // Recursive call with next provider
-      return analyzeFailure(logs, context, env);
-    }
-
-    throw error;
   }
+
+  throw lastError;
 }
 
 /**
@@ -148,6 +139,46 @@ async function selectProvider(availableProviders, tier, env) {
 
   // Fallback to first eligible provider
   return eligibleProviders[0];
+}
+
+async function getEligibleProviders(availableProviders, tier, env) {
+  const tierConfig = await getTierConfig(tier, env);
+  const allowedProviders = tierConfig.ai_providers;
+
+  let eligibleProviders = availableProviders;
+  if (!allowedProviders.includes('all')) {
+    eligibleProviders = availableProviders.filter(p => allowedProviders.includes(p));
+  }
+
+  if (eligibleProviders.length === 0) {
+    console.warn(`No eligible providers for tier ${tier}, falling back to all available`);
+    eligibleProviders = availableProviders;
+  }
+
+  if (!allowedProviders.includes('all')) {
+    const ordered = [];
+    for (const provider of allowedProviders) {
+      if (eligibleProviders.includes(provider)) {
+        ordered.push(provider);
+      }
+    }
+    return ordered.length ? ordered : eligibleProviders;
+  }
+
+  return eligibleProviders;
+}
+
+function buildProviderOrder(eligibleProviders) {
+  if (eligibleProviders.length <= 1) {
+    return eligibleProviders;
+  }
+
+  const startIndex = providerIndex % eligibleProviders.length;
+  providerIndex = (providerIndex + 1) % eligibleProviders.length;
+
+  return eligibleProviders
+    .slice(startIndex)
+    .concat(eligibleProviders.slice(0, startIndex));
 }
 
 /**

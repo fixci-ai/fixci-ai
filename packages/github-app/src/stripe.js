@@ -6,6 +6,61 @@
 import { logBillingEvent, getTierConfig } from './subscription.js';
 
 const STRIPE_API_URL = 'https://api.stripe.com/v1';
+const STRIPE_WEBHOOK_TOLERANCE_SECONDS = 300;
+
+function timingSafeEqualString(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
+async function hmacSha256Hex(secret, payload) {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signatureBytes = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+  return Array.from(new Uint8Array(signatureBytes))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function verifyStripeSignature(signatureHeader, payload, secret) {
+  if (!signatureHeader || !secret) {
+    return false;
+  }
+
+  const parts = signatureHeader.split(',').map(part => part.trim());
+  const timestampPart = parts.find(part => part.startsWith('t='));
+  const signaturePart = parts.find(part => part.startsWith('v1='));
+
+  if (!timestampPart || !signaturePart) {
+    return false;
+  }
+
+  const timestamp = parseInt(timestampPart.split('=')[1], 10);
+  const signature = signaturePart.split('=')[1];
+  if (!timestamp || !signature) {
+    return false;
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (Math.abs(nowSeconds - timestamp) > STRIPE_WEBHOOK_TOLERANCE_SECONDS) {
+    return false;
+  }
+
+  const signedPayload = `${timestamp}.${payload}`;
+  const expected = await hmacSha256Hex(secret, signedPayload);
+  return timingSafeEqualString(expected, signature);
+}
 
 /**
  * Create Stripe checkout session for upgrading subscription
@@ -74,13 +129,25 @@ export async function handleStripeWebhook(request, env) {
   const signature = request.headers.get('stripe-signature');
   const body = await request.text();
 
-  // Verify webhook signature (simplified - implement proper verification in production)
   if (!signature) {
     console.error('Missing Stripe webhook signature');
     return new Response('Missing signature', { status: 401 });
   }
 
-  const event = JSON.parse(body);
+  const isValid = await verifyStripeSignature(signature, body, env.STRIPE_WEBHOOK_SECRET);
+  if (!isValid) {
+    console.error('Invalid Stripe webhook signature');
+    return new Response('Invalid signature', { status: 401 });
+  }
+
+  let event;
+  try {
+    event = JSON.parse(body);
+  } catch (error) {
+    console.error('Invalid Stripe webhook payload:', error);
+    return new Response('Invalid payload', { status: 400 });
+  }
+
   console.log(`Received Stripe event: ${event.type}`);
 
   try {
