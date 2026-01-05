@@ -20,7 +20,9 @@ const ALLOWED_ORIGINS = [
   'https://www.fixci.dev',
   'https://dashboard.fixci.dev',
   'http://localhost:8080',  // Local development
-  'http://127.0.0.1:8080'   // Local development
+  'http://127.0.0.1:8080',  // Local development
+  'http://localhost:5173',  // Vite dev server (admin-v2)
+  'http://127.0.0.1:5173'   // Vite dev server (admin-v2)
 ];
 
 /**
